@@ -1,15 +1,14 @@
 import type { Handler } from '@chubbyts/chubbyts-http-types/dist/handler';
-import type { Response, ServerRequest } from '@chubbyts/chubbyts-http-types/dist/message';
 import type { ResponseFactory } from '@chubbyts/chubbyts-http-types/dist/message-factory';
-import type { ZodType } from 'zod';
-import { createBadRequest, createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
+import type { ZodObject, ZodType } from 'zod';
+import { z } from 'zod';
+import { createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
 import type { Decoder } from '@chubbyts/chubbyts-decode-encode/dist/decoder';
 import type { FindOneById, Persist } from '../repository';
-import { parseRequestBody } from '../request';
-import { stringifyResponseBody, valueToData } from '../response';
-import { zodToInvalidParameters } from '../zod-to-invalid-parameters';
-import type { EnrichModel, EnrichedModel } from '../model';
+import { valueToData } from '../response';
+import type { EnrichModel } from '../model';
+import { createInputOutputHandler } from './input-output';
 
 export const createUpdateHandler = <C>(
   findOneById: FindOneById<C>,
@@ -21,36 +20,35 @@ export const createUpdateHandler = <C>(
   encoder: Encoder,
   enrichModel: EnrichModel<C> = async (model) => model,
 ): Handler => {
-  return async (request: ServerRequest): Promise<Response> => {
-    const id = request.attributes.id as string;
-    const existingModel = await findOneById(id);
+  const attributesSchema = z.object({ id: z.string() });
+  const extendedInputSchema = z.object({
+    id: z.any().optional(),
+    createdAt: z.any().optional(),
+    updatedAt: z.any().optional(),
+    _embedded: z.any().optional(),
+    _links: z.any().optional(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(inputSchema as ZodObject<any>).shape,
+  });
 
-    if (!existingModel) {
-      throw createNotFound({ detail: `There is no entry with id "${id}"` });
-    }
+  return createInputOutputHandler<typeof attributesSchema, typeof extendedInputSchema, typeof outputSchema>(
+    attributesSchema,
+    decoder,
+    extendedInputSchema,
+    async ({ attributes, input, request }) => {
+      const model = await findOneById(attributes.id);
 
-    const {
-      id: _,
-      createdAt: __,
-      updatedAt: ___,
-      _embedded: ____,
-      _links: _____,
-      ...rest
-    } = (await parseRequestBody(decoder, request)) as unknown as EnrichedModel<C>;
+      if (!model) {
+        throw createNotFound({ detail: `There is no entry with id "${attributes.id}"` });
+      }
 
-    const result = inputSchema.safeParse(rest);
+      const { id: _, createdAt: __, updatedAt: ___, _embedded: ____, _links: _____, ...rest } = input;
 
-    if (!result.success) {
-      throw createBadRequest({ invalidParameters: zodToInvalidParameters(result.error) });
-    }
-
-    const model = await persist({ ...existingModel, updatedAt: new Date(), ...result.data });
-
-    return stringifyResponseBody(
-      request,
-      responseFactory(200),
-      encoder,
-      outputSchema.parse(valueToData(await enrichModel(model, { request }))),
-    );
-  };
+      return valueToData(await enrichModel(await persist({ ...model, updatedAt: new Date(), ...rest }), { request }));
+    },
+    outputSchema,
+    encoder,
+    responseFactory,
+    200,
+  );
 };
