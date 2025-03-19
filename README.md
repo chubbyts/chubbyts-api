@@ -24,7 +24,7 @@
  * node: 18
  * [@chubbyts/chubbyts-decode-encode][2]: ^1.4.1
  * [@chubbyts/chubbyts-http-error][3]: ^2.4.1
- * [@chubbyts/chubbyts-http-types][4]: ^1.3.1 || ^2.0.0
+ * [@chubbyts/chubbyts-http-types][4]: ^2.1.0
  * [@chubbyts/chubbyts-log-types][5]: ^1.4.3 || ^2.0.1
  * [@chubbyts/chubbyts-negotiation][6]: ^3.3.1
  * [@chubbyts/chubbyts-throwable-to-error][7]: ^1.3.2
