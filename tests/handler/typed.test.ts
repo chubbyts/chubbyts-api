@@ -5,7 +5,7 @@ import type { HttpError } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import { useObjectMock } from '@chubbyts/chubbyts-function-mock/dist/object-mock';
 import { ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
 import { describe, expect, test } from 'vitest';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { createTypedHandler } from '../../src/handler/typed';
 import { valueToData } from '../../src/response';
 
@@ -27,14 +27,14 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ contentType: z.string(), accept: z.string(), subject: z.string() }),
-        headers: z.object({ 'x-request-id': z.string() }),
-        query: z.object({ page: z.coerce.number() }),
-        body: z.object({ name: z.string() }),
+        attributes: v.object({ contentType: v.string(), accept: v.string(), subject: v.string() }),
+        headers: v.object({ 'x-request-id': v.string() }),
+        query: v.object({ page: v.pipe(v.unknown(), v.transform(Number), v.number()) }),
+        body: v.object({ name: v.string() }),
       },
       response: {
-        headers: z.object({ 'x-response-id': z.string() }),
-        body: z.object({ id: z.string(), name: z.string() }),
+        headers: v.object({ 'x-response-id': v.string() }),
+        body: v.object({ id: v.string(), name: v.string() }),
       },
       handler: async (request) => {
         expect(request.attributes).toEqual({
@@ -88,8 +88,8 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ contentType: z.string() }),
-        body: z.object({ name: z.string() }),
+        attributes: v.object({ contentType: v.string() }),
+        body: v.object({ name: v.string() }),
       },
       response: {},
       handler: async (request) => {
@@ -129,11 +129,11 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ contentType: z.string() }),
-        body: z.object({ name: z.string() }),
+        attributes: v.object({ contentType: v.string() }),
+        body: v.object({ name: v.string() }),
       },
       response: {
-        headers: z.object({ 'x-response-id': z.string() }),
+        headers: v.object({ 'x-response-id': v.string() }),
       },
       handler: async (request) => {
         expect(request.attributes).toEqual({ contentType: 'application/json' });
@@ -173,10 +173,10 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ accept: z.string(), subject: z.string() }),
+        attributes: v.object({ accept: v.string(), subject: v.string() }),
       },
       response: {
-        body: z.object({ id: z.string(), name: z.string() }),
+        body: v.object({ id: v.string(), name: v.string() }),
       },
       handler: async (request) => {
         expect(request.attributes).toEqual({ accept: 'application/vnd.user+json', subject: 'user' });
@@ -214,11 +214,11 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ accept: z.string(), subject: z.string() }),
+        attributes: v.object({ accept: v.string(), subject: v.string() }),
       },
       response: {
-        headers: z.object({ 'x-response-id': z.string() }),
-        body: z.object({ id: z.string(), name: z.string() }),
+        headers: v.object({ 'x-response-id': v.string() }),
+        body: v.object({ id: v.string(), name: v.string() }),
       },
       handler: async (request) => {
         expect(request.attributes).toEqual({ accept: 'application/vnd.user+json', subject: 'user' });
@@ -256,7 +256,7 @@ describe('createTypedHandler', () => {
   test('handles the path without request or response body', async () => {
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ subject: z.string() }),
+        attributes: v.object({ subject: v.string() }),
       },
       response: {},
       handler: async (request) => {
@@ -284,10 +284,10 @@ describe('createTypedHandler', () => {
   test('handles the path without request or response body with response headers', async () => {
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ subject: z.string() }),
+        attributes: v.object({ subject: v.string() }),
       },
       response: {
-        headers: z.object({ 'x-response-id': z.string() }),
+        headers: v.object({ 'x-response-id': v.string() }),
       },
       handler: async (request) => {
         expect(request.attributes).toEqual({ subject: 'user' });
@@ -322,11 +322,11 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ accept: z.string() }),
-        body: z.object({ name: z.string() }),
+        attributes: v.object({ accept: v.string() }),
+        body: v.object({ name: v.string() }),
       },
       response: {
-        body: z.object({ id: z.string(), name: z.string() }),
+        body: v.object({ id: v.string(), name: v.string() }),
       },
       handler: async () => ({ status: 200, statusText: 'OK', body: responseBody }),
       decoder: undefined,
@@ -361,11 +361,11 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ accept: z.string() }),
+        attributes: v.object({ accept: v.string() }),
         body: undefined,
       },
       response: {
-        body: z.object({ id: z.string(), name: z.string() }),
+        body: v.object({ id: v.string(), name: v.string() }),
       },
       handler: async () => ({ status: 200, statusText: 'OK', body: responseBody }),
       decoder,
@@ -398,11 +398,11 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ contentType: z.string() }),
-        body: z.object({ name: z.string() }),
+        attributes: v.object({ contentType: v.string() }),
+        body: v.object({ name: v.string() }),
       },
       response: {
-        body: z.object({ id: z.string(), name: z.string() }),
+        body: v.object({ id: v.string(), name: v.string() }),
       },
       handler: async () => ({ status: 204, statusText: 'No Content' }),
       decoder,
@@ -437,8 +437,8 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ contentType: z.string() }),
-        body: z.object({ name: z.string() }),
+        attributes: v.object({ contentType: v.string() }),
+        body: v.object({ name: v.string() }),
       },
       response: {
         body: undefined,
@@ -468,8 +468,8 @@ describe('createTypedHandler', () => {
   test('handles the path without request or response body with request body schema but without decoder', async () => {
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ subject: z.string() }),
-        body: z.object({ name: z.string() }),
+        attributes: v.object({ subject: v.string() }),
+        body: v.object({ name: v.string() }),
       },
       response: {},
       handler: async () => ({ status: 204, statusText: 'No Content' }),
@@ -493,10 +493,10 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ subject: z.string() }),
+        attributes: v.object({ subject: v.string() }),
       },
       response: {
-        body: z.object({ id: z.string(), name: z.string() }),
+        body: v.object({ id: v.string(), name: v.string() }),
       },
       handler: async () => ({ status: 200, statusText: 'OK', body: responseBody }),
       encoder: undefined,
@@ -522,7 +522,7 @@ describe('createTypedHandler', () => {
 
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ subject: z.string() }),
+        attributes: v.object({ subject: v.string() }),
       },
       response: {
         body: undefined,
@@ -549,8 +549,8 @@ describe('createTypedHandler', () => {
   test('rejects invalid request headers', async () => {
     const typedHandler = createTypedHandler({
       request: {
-        attributes: z.object({ subject: z.string() }),
-        headers: z.object({ 'x-request-id': z.string() }),
+        attributes: v.object({ subject: v.string() }),
+        headers: v.object({ 'x-request-id': v.string() }),
       },
       response: {},
       handler: async () => {
@@ -574,12 +574,14 @@ describe('createTypedHandler', () => {
           "context": "headers",
           "invalidParameters": [
             {
-              "context": {
-                "code": "invalid_type",
-                "expected": "string",
+              "details": {
+                "expected": ""x-request-id"",
+                "kind": "schema",
+                "received": "undefined",
+                "type": "object",
               },
               "name": "x-request-id",
-              "reason": "Invalid input: expected string, received undefined",
+              "reason": "Invalid key: Expected "x-request-id" but received undefined",
             },
           ],
           "status": 400,

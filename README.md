@@ -21,7 +21,7 @@
 
 Type-safe CRUD handlers and middlewares for [chubbyts-undici-server][7].
 
-You describe a model once as a [zod][10] schema. The package derives the list, persisted and enriched (HAL style `_embedded` / `_links`) variants from it, validates incoming attributes, query, headers and body against them, and encodes the response in the content type negotiated with the client.
+You describe a model once as a [valibot][10] schema. The package derives the list, persisted and enriched (HAL style `_embedded` / `_links`) variants from it, validates incoming attributes, query, headers and body against them, and encodes the response in the content type negotiated with the client.
 
 It ships:
 
@@ -44,14 +44,14 @@ It ships:
  * [@chubbyts/chubbyts-undici-server][7]: ^1.2.0
  * [qs][8]: ^6.15.3
  * [uuid][9]: ^14.0.1
- * [zod][10]: ^4.4.3
+ * [valibot][10]: ^1.5.0
 
 ## Installation
 
 Through [NPM](https://www.npmjs.com) as [@chubbyts/chubbyts-undici-api][1].
 
 ```sh
-npm i @chubbyts/chubbyts-undici-api@^2.4.1
+npm i @chubbyts/chubbyts-undici-api@^2.4.0
 ```
 
 ## Usage
@@ -67,7 +67,7 @@ The pieces fit together like this:
 Start from an *input* schema describing what a client may send. Everything else is derived from it.
 
 ```ts
-import { z } from 'zod';
+import * as v from 'valibot';
 import {
   createEnrichedModelListSchema,
   createEnrichedModelSchema,
@@ -91,19 +91,17 @@ import type {
 } from '@chubbyts/chubbyts-undici-api/dist/model';
 
 // what a client sends on create / update
-export const inputPetSchema = z.object({ name: stringSchema, tag: stringSchema.optional() }).strict();
+export const inputPetSchema = v.strictObject({ name: stringSchema, tag: v.optional(stringSchema) });
 export type InputPetSchema = typeof inputPetSchema;
 export type InputPet = InputModel<InputPetSchema>;
 
 // what a client sends as query string on list (offset, limit, filters and sort are required keys)
-export const inputPetListSchema = z
-  .object({
-    offset: numberSchema.default(0),
-    limit: numberSchema.default(20),
-    filters: z.object({ name: stringSchema.optional() }).strict().default({}),
-    sort: z.object({ name: sortSchema }).strict().default({}),
-  })
-  .strict();
+export const inputPetListSchema = v.strictObject({
+  offset: v.optional(numberSchema, 0),
+  limit: v.optional(numberSchema, 20),
+  filters: v.optional(v.strictObject({ name: v.optional(stringSchema) }), {}),
+  sort: v.optional(v.strictObject({ name: sortSchema }), {}),
+});
 export type InputPetListSchema = typeof inputPetListSchema;
 export type InputPetList = InputModelList<InputPetListSchema>;
 
@@ -127,7 +125,7 @@ export const enrichedPetListSchema: EnrichedModelListSchema<InputPetSchema, Inpu
 export type EnrichedPetList = EnrichedModelList<InputPetSchema, InputPetListSchema>;
 ```
 
-Reusable field schemas: `stringSchema` (non-empty string), `numberSchema` and `dateSchema` (coerced, so they accept query string values) and `sortSchema` (`'asc' | 'desc' | undefined`).
+Reusable field schemas: `stringSchema` (non-empty string), `numberSchema` and `dateSchema` (pipes that coerce their input, so they accept query string values) and `sortSchema` (optional picklist of `'asc' | 'desc'`). Input schemas can be `v.object`, `v.strictObject`, `v.looseObject` or `v.objectWithRest`; the derived schemas are always strict (only the `entries` are carried over, any rest schema is dropped).
 
 To type `_embedded`, pass an embedded schema as the last argument of `createEnrichedModelSchema` / `createEnrichedModelListSchema`. See the [typed handler guide][20] for an example with embedded vaccinations.
 
@@ -202,9 +200,9 @@ const response = await readHandler(
 
 Behavior worth knowing:
 
- * `createCreateHandler` sets `id` (uuid v7 by default, override through the last `uuid` parameter) and `createdAt`; `createUpdateHandler` keeps `id` and `createdAt` of the stored model and sets `updatedAt`. Properties of the request body with the same names would win, so keep your input schemas `.strict()` (as above) to reject them.
+ * `createCreateHandler` sets `id` (uuid v7 by default, override through the last `uuid` parameter) and `createdAt`; `createUpdateHandler` keeps `id` and `createdAt` of the stored model and sets `updatedAt`. Properties of the request body with the same names would win, so keep your input schemas `v.strictObject` (as above) to reject them.
  * The list, create, read and update handlers accept an optional `enrichModel` / `enrichModelList` callback as parameter after the `encoder`. Use it to add `_links` and `_embedded` before encoding. The default returns the model unchanged.
- * Validation failures throw a `400 Bad Request` whose `invalidParameters` list one entry per zod issue (`name`, `reason`, `context`), plus a `context` of `query`, `headers` or `body` telling where it came from.
+ * Validation failures throw a `400 Bad Request` whose `invalidParameters` list one entry per valibot issue (`name`, `reason`, `details`), plus a `context` of `query`, `headers` or `body` telling where it came from.
  * A missing model throws a `404 Not Found`.
  * `Date` values are serialized as ISO strings and `undefined` properties are dropped when the response body is encoded.
 
@@ -288,7 +286,7 @@ const errorMiddleware = createErrorMiddleware(
  * `parseRequestBody(decoder, serverRequest)` from `dist/request`: decodes the body using `attributes.contentType`.
  * `createResponseWithData(serverRequest, encoder, data, status, statusText, headers)` from `dist/response`: encodes `data` using `attributes.accept` and sets the `content-type` header.
  * `valueToData(value)` from `dist/response`: converts models (dates, http-errors, nested objects) into encodable data.
- * `zodToInvalidParameters(zodError)` from `dist/zod-to-invalid-parameters`: maps zod issues to the `invalidParameters` format used by [http-error][3].
+ * `valibotToInvalidParameters(issues)` from `dist/valibot-to-invalid-parameters`: maps valibot issues to the `invalidParameters` format used by [http-error][3].
 
 ### Service factories (chubbyts-dic-config)
 
@@ -375,7 +373,7 @@ const apiErrorMiddleware = container.get<Middleware>('errorMiddlewareapi');
 [7]: https://www.npmjs.com/package/@chubbyts/chubbyts-undici-server
 [8]: https://www.npmjs.com/package/qs
 [9]: https://www.npmjs.com/package/uuid
-[10]: https://www.npmjs.com/package/zod
+[10]: https://www.npmjs.com/package/valibot
 [11]: https://www.npmjs.com/package/@chubbyts/chubbyts-dic-config-factory
 [12]: https://www.npmjs.com/package/@chubbyts/chubbyts-dic-types
 [13]: https://www.npmjs.com/package/@chubbyts/chubbyts-dic-config

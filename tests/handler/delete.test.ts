@@ -1,7 +1,7 @@
 import type { HttpError } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import { describe, expect, test } from 'vitest';
 import { useFunctionMock } from '@chubbyts/chubbyts-function-mock/dist/function-mock';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
 import { createDeleteHandler } from '../../src/handler/delete';
 import type { FindModelById, RemoveModel } from '../../src/repository';
@@ -9,7 +9,7 @@ import { stringSchema } from '../../src/model';
 
 describe('delete', () => {
   describe('createDeleteHandler', () => {
-    const inputModelSchema = z.object({ name: stringSchema });
+    const inputModelSchema = v.object({ name: stringSchema });
 
     test('successfully', async () => {
       const id = '93cf0de1-e83e-4f68-800d-835e055a6fe8';

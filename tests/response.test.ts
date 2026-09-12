@@ -1,7 +1,7 @@
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
 import { EncodeError } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
 import { describe, expect, test } from 'vitest';
-import { ZodError } from 'zod';
+import { ValiError } from 'valibot';
 import { createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import { useObjectMock } from '@chubbyts/chubbyts-function-mock/dist/object-mock';
 import { ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
@@ -109,13 +109,14 @@ describe('response', () => {
         valueToData({
           key: {
             errors: [
-              new ZodError([
+              new ValiError([
                 {
-                  code: 'custom',
-                  params: { key: 'value' },
+                  kind: 'schema',
+                  type: 'string',
                   input: 'data',
+                  expected: 'string',
+                  received: '"data"',
                   message: 'Custom',
-                  path: ['path', 'to', 'field'],
                 },
               ]),
             ],
@@ -123,7 +124,7 @@ describe('response', () => {
         });
         throw new Error('Expect Error');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot('[Error: Unsupported value of type ZodError]');
+        expect(e).toMatchInlineSnapshot('[Error: Unsupported value of type ValiError]');
       }
     });
 

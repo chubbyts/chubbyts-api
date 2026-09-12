@@ -99,18 +99,7 @@ describe('createTypedHandler', () => {
 
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "accept"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected "accept" but received undefined]`);
       }
 
       expect(resolvePetListMocks).toHaveLength(0);
@@ -143,13 +132,14 @@ describe('createTypedHandler', () => {
             "context": "query",
             "invalidParameters": [
               {
-                "context": {
-                  "code": "invalid_type",
+                "details": {
                   "expected": "number",
+                  "kind": "schema",
                   "received": "NaN",
+                  "type": "number",
                 },
                 "name": "offset",
-                "reason": "Invalid input: expected number, received NaN",
+                "reason": "Invalid type: Expected number but received NaN",
               },
             ],
             "status": 400,
@@ -327,26 +317,7 @@ describe('createTypedHandler', () => {
 
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "contentType"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "accept"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected "contentType" but received undefined]`);
       }
 
       expect(decoderMocks).toHaveLength(0);
@@ -385,20 +356,24 @@ describe('createTypedHandler', () => {
             "context": "body",
             "invalidParameters": [
               {
-                "context": {
-                  "code": "invalid_type",
-                  "expected": "string",
+                "details": {
+                  "expected": ""name"",
+                  "kind": "schema",
+                  "received": "undefined",
+                  "type": "strict_object",
                 },
                 "name": "name",
-                "reason": "Invalid input: expected string, received undefined",
+                "reason": "Invalid key: Expected "name" but received undefined",
               },
               {
-                "context": {
-                  "code": "invalid_type",
-                  "expected": "array",
+                "details": {
+                  "expected": ""vaccinations"",
+                  "kind": "schema",
+                  "received": "undefined",
+                  "type": "strict_object",
                 },
                 "name": "vaccinations",
-                "reason": "Invalid input: expected array, received undefined",
+                "reason": "Invalid key: Expected "vaccinations" but received undefined",
               },
             ],
             "status": 400,
@@ -515,26 +490,7 @@ describe('createTypedHandler', () => {
 
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "accept"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "id"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected "accept" but received undefined]`);
       }
 
       expect(findPetByIdMocks).toHaveLength(0);
@@ -651,34 +607,7 @@ describe('createTypedHandler', () => {
 
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "contentType"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "accept"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            },
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "id"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected "contentType" but received undefined]`);
       }
 
       expect(decoderMocks).toHaveLength(0);
@@ -722,20 +651,24 @@ describe('createTypedHandler', () => {
             "context": "body",
             "invalidParameters": [
               {
-                "context": {
-                  "code": "invalid_type",
-                  "expected": "string",
+                "details": {
+                  "expected": ""name"",
+                  "kind": "schema",
+                  "received": "undefined",
+                  "type": "strict_object",
                 },
                 "name": "name",
-                "reason": "Invalid input: expected string, received undefined",
+                "reason": "Invalid key: Expected "name" but received undefined",
               },
               {
-                "context": {
-                  "code": "invalid_type",
-                  "expected": "array",
+                "details": {
+                  "expected": ""vaccinations"",
+                  "kind": "schema",
+                  "received": "undefined",
+                  "type": "strict_object",
                 },
                 "name": "vaccinations",
-                "reason": "Invalid input: expected array, received undefined",
+                "reason": "Invalid key: Expected "vaccinations" but received undefined",
               },
             ],
             "status": 400,
@@ -913,18 +846,7 @@ describe('createTypedHandler', () => {
 
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "expected": "string",
-              "code": "invalid_type",
-              "path": [
-                "id"
-              ],
-              "message": "Invalid input: expected string, received undefined"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected "id" but received undefined]`);
       }
 
       expect(findPetByIdMocks).toHaveLength(0);

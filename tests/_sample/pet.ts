@@ -2,7 +2,7 @@ import { STATUS_CODES } from 'node:http';
 import type { Decoder } from '@chubbyts/chubbyts-decode-encode/dist/decoder';
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
 import type { Handler } from '@chubbyts/chubbyts-undici-server/dist/server';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { v7 as uuid } from 'uuid';
 import { createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import { createTypedHandler } from '../../src/handler/typed';
@@ -25,7 +25,7 @@ import {
   stringSchema,
 } from '../../src/model';
 
-const inputVaccinationSchema = z.object({ name: stringSchema });
+const inputVaccinationSchema = v.object({ name: stringSchema });
 
 type InputVaccinationSchema = typeof inputVaccinationSchema;
 
@@ -37,33 +37,27 @@ const enrichedVaccinationSchema: EnrichedVaccinationSchema = createEnrichedModel
 
 export type EnrichedVaccination = EnrichedModel<InputVaccinationSchema>;
 
-const inputPetSchema = z
-  .object({
-    name: stringSchema,
-    tag: stringSchema.optional(),
-    vaccinations: z.array(
-      z
-        .object({
-          id: stringSchema,
-          injectedAt: dateSchema,
-        })
-        .strict(),
-    ),
-  })
-  .strict();
+const inputPetSchema = v.strictObject({
+  name: stringSchema,
+  tag: v.optional(stringSchema),
+  vaccinations: v.array(
+    v.strictObject({
+      id: stringSchema,
+      injectedAt: dateSchema,
+    }),
+  ),
+});
 
 type InputPetSchema = typeof inputPetSchema;
 
 export type InputPet = InputModel<InputPetSchema>;
 
-const inputPetListSchema = z
-  .object({
-    offset: numberSchema.default(0),
-    limit: numberSchema.default(20),
-    filters: z.object({ name: stringSchema.optional() }).strict().default({}),
-    sort: z.object({ name: sortSchema }).strict().default({}),
-  })
-  .strict();
+const inputPetListSchema = v.strictObject({
+  offset: v.optional(numberSchema, 0),
+  limit: v.optional(numberSchema, 20),
+  filters: v.optional(v.strictObject({ name: v.optional(stringSchema) }), {}),
+  sort: v.optional(v.strictObject({ name: sortSchema }), {}),
+});
 
 type InputPetListSchema = typeof inputPetListSchema;
 
@@ -73,12 +67,11 @@ export type Pet = Model<InputPetSchema>;
 
 export type PetList = ModelList<InputPetSchema, InputPetListSchema>;
 
-const embeddedPetSchema = z
-  .object({
-    vaccinations: z.array(enrichedVaccinationSchema.optional()),
-  })
-  .strict()
-  .optional();
+const embeddedPetSchema = v.optional(
+  v.strictObject({
+    vaccinations: v.array(v.optional(enrichedVaccinationSchema)),
+  }),
+);
 
 type EmbeddedPetSchema = typeof embeddedPetSchema;
 
@@ -112,7 +105,7 @@ export const createPetListHandler = (
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ accept: z.string() }),
+      attributes: v.object({ accept: v.string() }),
       query: inputPetListSchema,
     },
     response: {
@@ -140,7 +133,7 @@ export const createPetCreateHandler = (
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ contentType: z.string(), accept: z.string() }),
+      attributes: v.object({ contentType: v.string(), accept: v.string() }),
       body: inputPetSchema,
     },
     response: {
@@ -164,7 +157,7 @@ export const createPetCreateHandler = (
 export const createPetReadHandler = (findPetById: FindPetById, enrichPet: EnrichPet, encoder: Encoder): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ accept: z.string(), id: z.string() }),
+      attributes: v.object({ accept: v.string(), id: v.string() }),
     },
     response: {
       body: enrichedPetSchema,
@@ -197,7 +190,7 @@ export const createPetUpdateHandler = (
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ contentType: z.string(), accept: z.string(), id: z.string() }),
+      attributes: v.object({ contentType: v.string(), accept: v.string(), id: v.string() }),
       body: inputPetSchema,
     },
     response: {
@@ -233,7 +226,7 @@ export const createPetUpdateHandler = (
 export const createPetDeleteHandler = (findPetById: FindPetById, removePet: RemovePet): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ id: z.string() }),
+      attributes: v.object({ id: v.string() }),
     },
     response: {},
     handler: async ({ attributes }) => {

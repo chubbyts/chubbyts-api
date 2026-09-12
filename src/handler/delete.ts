@@ -1,6 +1,6 @@
 import { STATUS_CODES } from 'node:http';
 import { createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
-import { z } from 'zod';
+import * as v from 'valibot';
 import type { Handler } from '@chubbyts/chubbyts-undici-server/dist/server';
 import type { FindModelById, RemoveModel } from '../repository.js';
 import type { InputModelSchema } from '../model.js';
@@ -12,7 +12,7 @@ export const createDeleteHandler = <IMS extends InputModelSchema>(
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ id: z.string() }),
+      attributes: v.object({ id: v.string() }),
     },
     response: {},
     handler: async ({ attributes }) => {
