@@ -1,7 +1,7 @@
 {
   "name": "@chubbyts/chubbyts-undici-api",
   "type": "module",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "A crud middlewares/handlers for chubbyts-undici-server.",
   "keywords": [
     "chubbyts",

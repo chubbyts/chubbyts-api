@@ -19,7 +19,17 @@
 
 ## Description
 
-A set of crud middlewares/handlers for chubbyts-undici-server.
+Type-safe CRUD handlers and middlewares for [chubbyts-undici-server][7].
+
+You describe a model once as a [zod][10] schema. The package derives the list, persisted and enriched (HAL style `_embedded` / `_links`) variants from it, validates incoming attributes, query, headers and body against them, and encodes the response in the content type negotiated with the client.
+
+It ships:
+
+ * CRUD handlers: `createListHandler`, `createCreateHandler`, `createReadHandler`, `createUpdateHandler`, `createDeleteHandler`
+ * A generic, fully typed request/response handler: [`createTypedHandler`][20]
+ * Middlewares for `accept-language`, `accept` and `content-type` negotiation, and an error middleware that turns thrown errors into encoded [http-error][3] responses
+ * Model schema helpers and repository function types
+ * Service factories for [chubbyts-dic-config][13]
 
 ## Requirements
 
@@ -40,42 +50,32 @@ A set of crud middlewares/handlers for chubbyts-undici-server.
 
 Through [NPM](https://www.npmjs.com) as [@chubbyts/chubbyts-undici-api][1].
 
-```ts
-npm i @chubbyts/chubbyts-undici-api@^2.4.0
+```sh
+npm i @chubbyts/chubbyts-undici-api@^2.4.1
 ```
 
 ## Usage
 
-### Handler
+The pieces fit together like this:
+
+ 1. The negotiation middlewares read the `accept-language`, `accept` and `content-type` headers and store the negotiated values in `serverRequest.attributes` as `acceptLanguage`, `accept` and `contentType`. Your router adds route parameters such as `id` the same way.
+ 2. The handlers validate those attributes, the query string and the decoded body against your schemas, call your repository functions and encode the response body with the negotiated `accept` content type.
+ 3. The error middleware catches whatever is thrown (`400` for validation failures, `404` for missing models, `406` / `415` from negotiation, anything else you map) and encodes it as an error response.
+
+### Model
+
+Start from an *input* schema describing what a client may send. Everything else is derived from it.
 
 ```ts
 import { z } from 'zod';
-import { createEncoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
-import { createJsonTypeEncoder }
-  from '@chubbyts/chubbyts-decode-encode/dist/encoder/json-type-encoder';
-import { ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
-import { createDecoder } from '@chubbyts/chubbyts-decode-encode/dist/decoder';
-import { createJsonTypeDecoder }
-  from '@chubbyts/chubbyts-decode-encode/dist/decoder/json-type-decoder';
-import { createListHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/list';
-import type {
-  FindModelById,
-  PersistModel,
-  RemoveModel,
-  ResolveModelList,
-} from '@chubbyts/chubbyts-undici-api/dist/repository';
-import { createCreateHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/create';
-import { createReadHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/read';
-import { createUpdateHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/update';
-import { createDeleteHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/delete';
 import {
+  createEnrichedModelListSchema,
+  createEnrichedModelSchema,
+  createModelListSchema,
+  createModelSchema,
   numberSchema,
   sortSchema,
   stringSchema,
-  createEnrichedModelListSchema,
-  createModelSchema,
-  createModelListSchema,
-  createEnrichedModelSchema,
 } from '@chubbyts/chubbyts-undici-api/dist/model';
 import type {
   EnrichedModel,
@@ -90,15 +90,13 @@ import type {
   ModelSchema,
 } from '@chubbyts/chubbyts-undici-api/dist/model';
 
-export const inputMyModelSchema = z.object({
-  name: stringSchema,
-  value: stringSchema,
-}).strict();
+// what a client sends on create / update
+export const inputPetSchema = z.object({ name: stringSchema, tag: stringSchema.optional() }).strict();
+export type InputPetSchema = typeof inputPetSchema;
+export type InputPet = InputModel<InputPetSchema>;
 
-export type InputMyModelSchema = typeof inputMyModelSchema;
-export type InputMyModel = InputModel<InputMyModelSchema>;
-
-export const inputMyModelListSchema = z
+// what a client sends as query string on list (offset, limit, filters and sort are required keys)
+export const inputPetListSchema = z
   .object({
     offset: numberSchema.default(0),
     limit: numberSchema.default(20),
@@ -106,164 +104,191 @@ export const inputMyModelListSchema = z
     sort: z.object({ name: sortSchema }).strict().default({}),
   })
   .strict();
+export type InputPetListSchema = typeof inputPetListSchema;
+export type InputPetList = InputModelList<InputPetListSchema>;
 
-export type InputMyModelListSchema = typeof inputMyModelListSchema;
+// persisted model: input + id, createdAt, updatedAt
+export const petSchema: ModelSchema<InputPetSchema> = createModelSchema(inputPetSchema);
+export type Pet = Model<InputPetSchema>;
 
-export type InputMyModelList = InputModelList<InputMyModelListSchema>;
-
-export type MyModelSchema = ModelSchema<InputMyModelSchema>;
-
-export const myModelSchema: MyModelSchema = createModelSchema(inputMyModelSchema);
-
-export type MyModel = Model<InputMyModelSchema>;
-
-export type MyModelListSchema = ModelListSchema<InputMyModelSchema, InputMyModelListSchema>;
-
-export const myModelListSchema: MyModelListSchema = createModelListSchema(
-  inputMyModelSchema,
-  inputMyModelListSchema,
+// persisted list: list input + count, items
+export const petListSchema: ModelListSchema<InputPetSchema, InputPetListSchema> = createModelListSchema(
+  inputPetSchema,
+  inputPetListSchema,
 );
+export type PetList = ModelList<InputPetSchema, InputPetListSchema>;
 
-export type MyModelList = ModelList<InputMyModelSchema, InputMyModelListSchema>;
+// response model / list: persisted + optional _embedded and _links
+export const enrichedPetSchema: EnrichedModelSchema<InputPetSchema> = createEnrichedModelSchema(inputPetSchema);
+export type EnrichedPet = EnrichedModel<InputPetSchema>;
 
-export type EnrichedMyModelSchema = EnrichedModelSchema<InputMyModelSchema>;
+export const enrichedPetListSchema: EnrichedModelListSchema<InputPetSchema, InputPetListSchema> =
+  createEnrichedModelListSchema(inputPetSchema, inputPetListSchema);
+export type EnrichedPetList = EnrichedModelList<InputPetSchema, InputPetListSchema>;
+```
 
-export const enrichedMyModelSchema: EnrichedMyModelSchema = createEnrichedModelSchema(
-  inputMyModelSchema,
-);
+Reusable field schemas: `stringSchema` (non-empty string), `numberSchema` and `dateSchema` (coerced, so they accept query string values) and `sortSchema` (`'asc' | 'desc' | undefined`).
 
-export type EnrichedMyModel = EnrichedModel<InputMyModelSchema>;
+To type `_embedded`, pass an embedded schema as the last argument of `createEnrichedModelSchema` / `createEnrichedModelListSchema`. See the [typed handler guide][20] for an example with embedded vaccinations.
 
-export type EnrichedMyModelListSchema = EnrichedModelListSchema<
-  InputMyModelSchema,
-  InputMyModelListSchema,
->;
+### Repository
 
-export const enrichedMyModelListSchema: EnrichedMyModelListSchema =
-  createEnrichedModelListSchema(
-    inputMyModelSchema,
-    inputMyModelListSchema,
-  );
+The handlers talk to your storage through four function types. Implement them however you like.
 
-export type EnrichedMyModelList = EnrichedModelList<
-  InputMyModelSchema,
-  InputMyModelListSchema,
->;
+```ts
+import type {
+  FindModelById,
+  PersistModel,
+  RemoveModel,
+  ResolveModelList,
+} from '@chubbyts/chubbyts-undici-api/dist/repository';
 
-// decoder / encoder
+const resolvePetList: ResolveModelList<InputPetSchema, InputPetListSchema> = async (inputPetList) => {
+  // return { ...inputPetList, count, items }
+};
+
+const findPetById: FindModelById<InputPetSchema> = async (id) => {
+  // return the pet or undefined
+};
+
+const persistPet: PersistModel<InputPetSchema> = async (pet) => {
+  // insert or update, return the persisted pet
+};
+
+const removePet: RemoveModel<InputPetSchema> = async (pet) => {
+  // delete
+};
+```
+
+### Handler
+
+| Handler               | Reads                       | Required attributes           | Success | Errors     |
+|-----------------------|-----------------------------|-------------------------------|---------|------------|
+| `createListHandler`   | query string                | `accept`                      | `200`   | `400`      |
+| `createCreateHandler` | body                        | `contentType`, `accept`       | `201`   | `400`      |
+| `createReadHandler`   | –                           | `accept`, `id`                | `200`   | `404`      |
+| `createUpdateHandler` | body                        | `contentType`, `accept`, `id` | `200`   | `400`, `404` |
+| `createDeleteHandler` | –                           | `id`                          | `204`   | `404`      |
+
+```ts
+import { createDecoder } from '@chubbyts/chubbyts-decode-encode/dist/decoder';
+import { createJsonTypeDecoder } from '@chubbyts/chubbyts-decode-encode/dist/decoder/json-type-decoder';
+import { createEncoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
+import { createJsonTypeEncoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder/json-type-encoder';
+import { ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
+import { createCreateHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/create';
+import { createDeleteHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/delete';
+import { createListHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/list';
+import { createReadHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/read';
+import { createUpdateHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/update';
 
 const decoder = createDecoder([createJsonTypeDecoder()]);
 const encoder = createEncoder([createJsonTypeEncoder()]);
 
-// repository
+const listHandler = createListHandler(inputPetListSchema, resolvePetList, enrichedPetListSchema, encoder);
+const createHandler = createCreateHandler(decoder, inputPetSchema, persistPet, enrichedPetSchema, encoder);
+const readHandler = createReadHandler(findPetById, enrichedPetSchema, encoder);
+const updateHandler = createUpdateHandler(findPetById, decoder, inputPetSchema, persistPet, enrichedPetSchema, encoder);
+const deleteHandler = createDeleteHandler(findPetById, removePet);
 
-const resolveModelList: ResolveModelList<InputMyModelSchema, InputMyModelListSchema> = (
-  modelList: InputModelList<InputMyModelListSchema>,
-): Promise<ModelList<InputMyModelSchema>> => {};
-
-const findModelById: FindModelById<InputMyModelSchema> = async (
-  id: string,
-): Promise<Model<InputMyModelSchema> | undefined> => {};
-
-const persistModel: PersistModel<InputMyModelSchema> = (
-  model: Model<InputMyModelSchema>,
-): Promise<Model<InputMyModelSchema>> => {};
-
-const removeModel: RemoveModel<InputMyModelSchema> = (
-  model: Model<InputMyModelSchema>,
-): Promise<void> => {};
-
-// handler
-
-const listHandler = createListHandler(
-  inputMyModelListSchema,
-  resolveModelList,
-  enrichedMyModelListSchema,
-  encoder,
+// in production the middlewares and your router populate the attributes
+const response = await readHandler(
+  new ServerRequest('http://localhost:8080/api/pets/8ba9661b-ba7f-436b-bd25-c0606f911f7d', {
+    method: 'GET',
+    attributes: { accept: 'application/json', id: '8ba9661b-ba7f-436b-bd25-c0606f911f7d' },
+  }),
 );
-
-(async () => {
-  const serverRequest = new ServerRequest(
-    'http://localhost:8080/api/pets',
-    { method: 'GET' },
-  );
-  const response = await listHandler(serverRequest);
-})();
-
-const createHandler = createCreateHandler(
-  decoder,
-  inputMyModelSchema,
-  persistModel,
-  enrichedMyModelSchema,
-  encoder,
-);
-
-(async () => {
-  const serverRequest = new ServerRequest(
-    'http://localhost:8080/api/pets',
-    { method: 'POST' },
-  );
-  const response = await createHandler(serverRequest);
-})();
-
-const readHandler = createReadHandler<InputMyModelSchema>(
-  findModelById,
-  enrichedMyModelSchema,
-  encoder,
-);
-
-(async () => {
-  const serverRequest = new ServerRequest(
-    'http://localhost:8080/api/pets/8ba9661b-ba7f-436b-bd25-c0606f911f7d',
-    { method: 'GET' },
-  );
-  const response = await readHandler(serverRequest);
-})();
-
-const updateHandler = createUpdateHandler(
-  findModelById,
-  decoder,
-  inputMyModelSchema,
-  persistModel,
-  enrichedMyModelSchema,
-  encoder,
-);
-
-(async () => {
-  const serverRequest = new ServerRequest(
-    'http://localhost:8080/api/pets/8ba9661b-ba7f-436b-bd25-c0606f911f7d',
-    { method: 'PUT' },
-  );
-  const response = await updateHandler(serverRequest);
-})();
-
-const deleteHandler = createDeleteHandler<InputMyModelSchema>(
-  findModelById,
-  removeModel,
-);
-
-(async () => {
-  const serverRequest = new ServerRequest(
-    'http://localhost:8080/api/pets/8ba9661b-ba7f-436b-bd25-c0606f911f7d',
-    { method: 'DELETE' },
-  );
-  const response = await deleteHandler(serverRequest);
-})();
 ```
+
+Behavior worth knowing:
+
+ * `createCreateHandler` sets `id` (uuid v7 by default, override through the last `uuid` parameter) and `createdAt`; `createUpdateHandler` keeps `id` and `createdAt` of the stored model and sets `updatedAt`. Properties of the request body with the same names would win, so keep your input schemas `.strict()` (as above) to reject them.
+ * The list, create, read and update handlers accept an optional `enrichModel` / `enrichModelList` callback as parameter after the `encoder`. Use it to add `_links` and `_embedded` before encoding. The default returns the model unchanged.
+ * Validation failures throw a `400 Bad Request` whose `invalidParameters` list one entry per zod issue (`name`, `reason`, `context`), plus a `context` of `query`, `headers` or `body` telling where it came from.
+ * A missing model throws a `404 Not Found`.
+ * `Date` values are serialized as ISO strings and `undefined` properties are dropped when the response body is encoded.
 
 #### createTypedHandler
 
-See [typed][20] if you want/need more flexibility and prefer a typed generic handler?
+All CRUD handlers are built on `createTypedHandler`. Use it directly when you need other request attributes, headers, status codes or a response shape the CRUD handlers do not cover. See the [typed handler guide][20].
 
 ### Middleware
 
+Register the negotiation middlewares in front of the handlers. Each one reads a header, negotiates it against the supported values of the given [negotiator][5] and stores the result in `serverRequest.attributes`. A missing or unsupported header aborts the request with an [http-error][3] listing the `supportedValues`.
+
+| Middleware                                  | Header            | Attribute        | Error                        |
+|---------------------------------------------|-------------------|------------------|------------------------------|
+| `createAcceptLanguageNegotiationMiddleware` | `accept-language` | `acceptLanguage` | `406 Not Acceptable`         |
+| `createAcceptNegotiationMiddleware`         | `accept`          | `accept`         | `406 Not Acceptable`         |
+| `createContentTypeNegotiationMiddleware`    | `content-type`    | `contentType`    | `415 Unsupported Media Type` |
+
 #### createAcceptLanguageNegotiationMiddleware
+
+```ts
+import { createAcceptLanguageNegotiator } from '@chubbyts/chubbyts-negotiation/dist/accept-language-negotiator';
+import { createAcceptLanguageNegotiationMiddleware }
+  from '@chubbyts/chubbyts-undici-api/dist/middleware/accept-language-negotiation-middleware';
+
+const acceptLanguageNegotiationMiddleware = createAcceptLanguageNegotiationMiddleware(
+  createAcceptLanguageNegotiator(['en', 'de']),
+);
+```
 
 #### createAcceptNegotiationMiddleware
 
+Feed it the content types your encoder can produce.
+
+```ts
+import { createAcceptNegotiator } from '@chubbyts/chubbyts-negotiation/dist/accept-negotiator';
+import { createAcceptNegotiationMiddleware }
+  from '@chubbyts/chubbyts-undici-api/dist/middleware/accept-negotiation-middleware';
+
+const acceptNegotiationMiddleware = createAcceptNegotiationMiddleware(createAcceptNegotiator(encoder.contentTypes));
+```
+
 #### createContentTypeNegotiationMiddleware
 
+Feed it the content types your decoder can parse. Only needed on routes with a request body.
+
+```ts
+import { createContentTypeNegotiator } from '@chubbyts/chubbyts-negotiation/dist/content-type-negotiator';
+import { createContentTypeNegotiationMiddleware }
+  from '@chubbyts/chubbyts-undici-api/dist/middleware/content-type-negotiation-middleware';
+
+const contentTypeNegotiationMiddleware = createContentTypeNegotiationMiddleware(
+  createContentTypeNegotiator(decoder.contentTypes),
+);
+```
+
 #### createErrorMiddleware
+
+Catches every error thrown by the wrapped handler and answers with an encoded [http-error][3].
+
+```ts
+import { createInternalServerError } from '@chubbyts/chubbyts-http-error/dist/http-error';
+import { createErrorMiddleware } from '@chubbyts/chubbyts-undici-api/dist/middleware/error-middleware';
+
+const errorMiddleware = createErrorMiddleware(
+  encoder,
+  (e: unknown) => createInternalServerError({ cause: e }), // mapToHttpError, default: rethrow
+  false, // debug
+  logger, // @chubbyts/chubbyts-log-types Logger, default: noop logger
+  ['acceptLanguage'], // attribute names to add to the log context
+);
+```
+
+ * An [http-error][3] is used as is. Anything else goes through `mapToHttpError`; if that throws too (the default), the result is a `500 Internal Server Error` carrying `name`, `message` and `stack` of the original error.
+ * Errors below `500` are logged as `info`, others as `error`, together with `method`, `pathnameSearch` and the requested attributes.
+ * The response body contains the full error for client errors or when `debug` is `true`. Otherwise it is reduced to `type`, `status` and `title`, so internals never leak in production.
+ * Headers of the http-error (for example `allow`) are copied to the response.
+ * The response is encoded with the `accept` attribute, so the accept negotiation middleware has to run *before* this one.
+
+### Helpers
+
+ * `parseRequestBody(decoder, serverRequest)` from `dist/request`: decodes the body using `attributes.contentType`.
+ * `createResponseWithData(serverRequest, encoder, data, status, statusText, headers)` from `dist/response`: encodes `data` using `attributes.accept` and sets the `content-type` header.
+ * `valueToData(value)` from `dist/response`: converts models (dates, http-errors, nested objects) into encodable data.
+ * `zodToInvalidParameters(zodError)` from `dist/zod-to-invalid-parameters`: maps zod issues to the `invalidParameters` format used by [http-error][3].
 
 ### Service factories (chubbyts-dic-config)
 
@@ -304,16 +329,22 @@ const errorMiddleware = container.get<Middleware>('errorMiddleware');
 
 Each factory uses the related services of the container if registered, and creates them through the shipped factories of the other packages otherwise. Register any of them under its name to replace it or to share it with other services:
 
- * `acceptLanguageNegotiationMiddlewareServiceFactory`: `acceptLanguageNegotiator` (default `acceptLanguageNegotiatorServiceFactory`)
- * `acceptNegotiationMiddlewareServiceFactory`: `acceptNegotiator` (default `acceptNegotiatorServiceFactory`, the content types of the `encoder`)
- * `contentTypeNegotiationMiddlewareServiceFactory`: `contentTypeNegotiator` (default `contentTypeNegotiatorServiceFactory`, the content types of the `decoder`)
- * `errorMiddlewareServiceFactory`: `encoder` (default `encoderServiceFactory`), `mapToHttpError` (default `mapToHttpErrorServiceFactory`, rethrows), `errorMiddlewareLoggableAttributeNames` (default `errorMiddlewareLoggableAttributeNamesServiceFactory`, `[]`), `debug` from `config.debug` and a `logger` service if registered
+| Factory                                             | Resolved services (default)                                                                                                                                                                                                                                                       |
+|-----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `acceptLanguageNegotiationMiddlewareServiceFactory` | `acceptLanguageNegotiator` (`acceptLanguageNegotiatorServiceFactory`, needs `acceptLanguageNegotiatorSupportedValues`)                                                                                                                                                             |
+| `acceptNegotiationMiddlewareServiceFactory`         | `acceptNegotiator` (`acceptNegotiatorServiceFactory`, the content types of `encoder`)                                                                                                                                                                                             |
+| `contentTypeNegotiationMiddlewareServiceFactory`    | `contentTypeNegotiator` (`contentTypeNegotiatorServiceFactory`, the content types of `decoder`)                                                                                                                                                                                   |
+| `errorMiddlewareServiceFactory`                     | `encoder` (`encoderServiceFactory`), `mapToHttpError` (`mapToHttpErrorServiceFactory`, rethrows), `errorMiddlewareLoggableAttributeNames` (`errorMiddlewareLoggableAttributeNamesServiceFactory`, `[]`), `debug` from `config.debug`, `logger` if registered |
 
 #### With names
 
 The same factories can be registered multiple times with a name: the name gets appended to each service id (`errorMiddlewareapi`, `encoderapi`, `mapToHttpErrorapi`, ...) and passed down to the reused factories of the other packages.
 
 ```ts
+import type { HttpError } from '@chubbyts/chubbyts-http-error/dist/http-error';
+import { createInternalServerError } from '@chubbyts/chubbyts-http-error/dist/http-error';
+import type { MapToHttpError } from '@chubbyts/chubbyts-undici-api/dist/middleware/error-middleware';
+
 const container = createContainerByConfigFactory({
   dependencies: {
     factories: new Map<string, ConfigFactory>([
@@ -348,7 +379,6 @@ const apiErrorMiddleware = container.get<Middleware>('errorMiddlewareapi');
 [11]: https://www.npmjs.com/package/@chubbyts/chubbyts-dic-config-factory
 [12]: https://www.npmjs.com/package/@chubbyts/chubbyts-dic-types
 [13]: https://www.npmjs.com/package/@chubbyts/chubbyts-dic-config
-
 
 [20]: doc/handler/typed.md
 

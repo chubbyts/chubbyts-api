@@ -1,9 +1,52 @@
 # Typed
 
-The idea of the `createTypedHandler` is to provide a generic solution for typed request / response handlers for [@chubbyts/chubbyts-undici-server][1].
-This one is meant to be used if you don't like the crud handlers provided by this library or you want/need more control.
+`createTypedHandler` is the generic building block behind the CRUD handlers of this library. It turns a set of [zod][2] schemas plus a plain async function into a [@chubbyts/chubbyts-undici-server][1] `Handler`.
+
+Reach for it when the CRUD handlers do not fit: custom status codes, additional route attributes, validated headers, a response without a body, or business logic beyond find / persist / remove.
+
+## How it works
+
+```ts
+import { createTypedHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/typed';
+
+const handler = createTypedHandler({
+  request: {
+    attributes, // required: zod object schema for serverRequest.attributes
+    headers,    // optional: zod object schema for the request headers
+    query,      // optional: zod object schema for the parsed (qs) query string
+    body,       // optional: zod object schema for the decoded request body
+  },
+  response: {
+    headers,    // optional: zod object schema for the response headers
+    body,       // optional: zod object schema for the response body
+  },
+  handler: async ({ attributes, headers, query, body }) => ({ status, statusText, headers, body }),
+  decoder,      // required when request.body is set
+  encoder,      // required when response.body is set
+});
+```
+
+Per request it:
+
+ 1. Parses `serverRequest.attributes` with `request.attributes`.
+ 2. Parses the request headers, the query string (via [qs][3]) and the decoded body with the given schemas. Each failure throws a `400 Bad Request` with `invalidParameters` and a `context` of `headers`, `query` or `body`.
+ 3. Calls your `handler` with the fully typed values.
+ 4. Parses the returned `headers` and `body` with the response schemas, encodes the body with the negotiated `accept` content type and returns a `Response`.
+
+Which shape you get is determined by the presence of `request.body` and `response.body`. The attributes schema has to include what the variant needs:
+
+| `request.body` | `response.body` | Required attributes       | Required codecs        |
+|----------------|-----------------|---------------------------|------------------------|
+| yes            | yes             | `contentType`, `accept`   | `decoder`, `encoder`   |
+| yes            | no              | `contentType`             | `decoder`              |
+| no             | yes             | `accept`                  | `encoder`              |
+| no             | no              | –                         | –                      |
+
+The `attributes` schema may of course declare more keys, like `id` for a route parameter.
 
 ## Usage
+
+A pet API with embedded vaccinations. The five handlers below are functionally what `createListHandler`, `createCreateHandler`, `createReadHandler`, `createUpdateHandler` and `createDeleteHandler` do.
 
 ```ts
 import { STATUS_CODES } from 'node:http';
@@ -13,7 +56,7 @@ import type { Handler } from '@chubbyts/chubbyts-undici-server/dist/server';
 import { z } from 'zod';
 import { v7 as uuid } from 'uuid';
 import { createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
-import { createTypedHandler } from '@chubbyts/chubbyts-undici-api/dist/typed';
+import { createTypedHandler } from '@chubbyts/chubbyts-undici-api/dist/handler/typed';
 import type {
   EnrichedModel,
   EnrichedModelList,
@@ -33,6 +76,8 @@ import {
   stringSchema,
 } from '@chubbyts/chubbyts-undici-api/dist/model';
 
+// vaccination: a second model that gets embedded into a pet
+
 const inputVaccinationSchema = z.object({ name: stringSchema });
 
 type InputVaccinationSchema = typeof inputVaccinationSchema;
@@ -44,6 +89,8 @@ type EnrichedVaccinationSchema = EnrichedModelSchema<InputVaccinationSchema>;
 const enrichedVaccinationSchema: EnrichedVaccinationSchema = createEnrichedModelSchema(inputVaccinationSchema);
 
 export type EnrichedVaccination = EnrichedModel<InputVaccinationSchema>;
+
+// pet
 
 const inputPetSchema = z
   .object({
@@ -81,6 +128,8 @@ export type Pet = Model<InputPetSchema>;
 
 export type PetList = ModelList<InputPetSchema, InputPetListSchema>;
 
+// typed _embedded for the enriched pet
+
 const embeddedPetSchema = z
   .object({
     vaccinations: z.array(enrichedVaccinationSchema.optional()),
@@ -106,12 +155,16 @@ const enrichedPetListSchema: EnrichedPetListSchema = createEnrichedModelListSche
 
 export type EnrichedPetList = EnrichedModelList<InputPetSchema, InputPetListSchema, EmbeddedPetSchema>;
 
+// repository / enrichment contracts
+
 export type EnrichPet = (pet: Pet) => Promise<EnrichedPet>;
 export type EnrichPetList = (petList: PetList) => Promise<EnrichedPetList>;
 export type FindPetById = (id: string) => Promise<Pet | undefined>;
 export type PersistPet = (pet: Pet) => Promise<Pet>;
 export type RemovePet = (pet: Pet) => Promise<void>;
 export type ResolvePetList = (inputPetList: InputPetList) => Promise<PetList>;
+
+// handlers
 
 export const createPetListHandler = (
   resolvePetList: ResolvePetList,
@@ -263,3 +316,5 @@ export const createPetDeleteHandler = (findPetById: FindPetById, removePet: Remo
 ```
 
 [1]: https://www.npmjs.com/package/@chubbyts/chubbyts-undici-server
+[2]: https://www.npmjs.com/package/zod
+[3]: https://www.npmjs.com/package/qs
