@@ -4,8 +4,8 @@ export const stringSchema = z.string().min(1);
 export const numberSchema = z.coerce.number();
 export const dateSchema = z.coerce.date();
 
-type NumberSchema = z.ZodNumber | z.ZodDefault<z.ZodNumber> | z.ZodCoercedNumber | z.ZodDefault<z.ZodCoercedNumber>;
-type DateSchema = z.ZodDate | z.ZodDefault<z.ZodDate> | z.ZodCoercedDate | z.ZodDefault<z.ZodCoercedDate>;
+type NumberSchema = z.ZodType<number>;
+type DateSchema = z.ZodType<Date>;
 
 export const sortSchema = z.union([z.literal('asc'), z.literal('desc')]).optional();
 
@@ -16,7 +16,7 @@ export type AnyZodObject = z.ZodObject<z.ZodRawShape>;
 
 const embeddedSchema = z.object({}).loose().optional();
 
-export type EmbeddedSchema = z.ZodOptional<AnyZodObject>;
+export type EmbeddedSchema = z.ZodOptional<z.ZodType<{ [key: string]: unknown }>>;
 
 const linkSchema = z.intersection(
   z.object({
@@ -48,10 +48,8 @@ type ModelShape<IMS extends InputModelSchema> = IMS['shape'] & {
 export type InputModelListSchema = z.ZodObject<{
   offset: NumberSchema;
   limit: NumberSchema;
-  filters: z.ZodObject | z.ZodDefault<z.ZodObject>;
-  sort:
-    | z.ZodObject<{ [key: string]: SortSchema }>
-    | z.ZodDefault<z.ZodObject<{ [key: string]: SortSchema | z.ZodDefault<SortSchema> }>>;
+  filters: z.ZodType<{ [key: string]: unknown }>;
+  sort: z.ZodType<{ [key: string]: Sort }>;
 }>;
 
 export type InputModelList<IMLS extends InputModelListSchema> = z.output<IMLS>;

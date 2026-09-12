@@ -7,27 +7,23 @@ import { parse } from 'qs';
 import type { z } from 'zod';
 import { zodToInvalidParameters } from '../zod-to-invalid-parameters.js';
 import { valueToData } from '../response.js';
-import type { AnyZodObject } from '../model.js';
 
-type HeadersSchema = z.ZodObject<{ [key: string]: z.ZodString }>;
+type ObjectSchema = z.ZodType<{ [key: string]: unknown }>;
 
-type ContentTypeAttributesSchema = z.ZodObject<{
-  contentType: z.ZodString;
-}>;
+type HeadersSchema = z.ZodType<{ [key: string]: string }>;
 
-type AcceptAttributesSchema = z.ZodObject<{
-  accept: z.ZodString;
-}>;
+type ContentTypeAttributesSchema = z.ZodType<{ contentType: string }>;
 
-type ContentTypeAndAcceptAttributesSchema = z.ZodObject<{
-  contentType: z.ZodString;
-  accept: z.ZodString;
-}>;
+type AcceptAttributesSchema = z.ZodType<{ accept: string }>;
+
+type ContentTypeAndAcceptAttributesSchema = z.ZodType<{ contentType: string; accept: string }>;
+
+type ResponseOutput<S> = S extends z.ZodType ? z.output<S> : { [key: string]: never };
 
 type RequestSchema<
-  RequestAttributesSchema extends AnyZodObject,
+  RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
+  RequestQuerySchema extends ObjectSchema | undefined,
 > = {
   attributes: RequestAttributesSchema;
   headers?: RequestHeadersSchema;
@@ -35,10 +31,10 @@ type RequestSchema<
 };
 
 type RequestWithBodySchema<
-  RequestAttributesSchema extends AnyZodObject,
+  RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
-  RequestBodySchema extends AnyZodObject,
+  RequestQuerySchema extends ObjectSchema | undefined,
+  RequestBodySchema extends ObjectSchema,
 > = RequestSchema<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema> & {
   body: RequestBodySchema;
 };
@@ -49,15 +45,15 @@ type ResponseSchema<ResponseHeadersSchema extends HeadersSchema | undefined> = {
 
 type ResponseWithBodySchema<
   ResponseHeadersSchema extends HeadersSchema | undefined,
-  ResponseBodySchema extends AnyZodObject,
+  ResponseBodySchema extends ObjectSchema,
 > = ResponseSchema<ResponseHeadersSchema> & {
   body: ResponseBodySchema;
 };
 
 type HandlerRequest<
-  RequestAttributesSchema extends AnyZodObject,
+  RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
+  RequestQuerySchema extends ObjectSchema | undefined,
 > = {
   attributes: z.output<RequestAttributesSchema>;
   headers: z.output<RequestHeadersSchema>;
@@ -65,10 +61,10 @@ type HandlerRequest<
 };
 
 type HandlerRequestWithBody<
-  RequestAttributesSchema extends AnyZodObject,
+  RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
-  RequestBodySchema extends AnyZodObject,
+  RequestQuerySchema extends ObjectSchema | undefined,
+  RequestBodySchema extends ObjectSchema,
 > = HandlerRequest<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema> & {
   body: z.output<RequestBodySchema>;
 };
@@ -76,7 +72,7 @@ type HandlerRequestWithBody<
 type HandlerResponseBase<ResponseHeadersSchema extends HeadersSchema | undefined> = {
   status: number;
   statusText?: string;
-  headers?: z.output<ResponseHeadersSchema>;
+  headers?: ResponseOutput<ResponseHeadersSchema>;
 };
 
 type HandlerResponseWithBody<ResponseHeadersSchema extends HeadersSchema | undefined, ResponseBody> = Promise<
@@ -92,10 +88,10 @@ type HandlerResponse<ResponseHeadersSchema extends HeadersSchema | undefined, Re
 type WithRequestAndResponse<
   RequestAttributesSchema extends ContentTypeAndAcceptAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
-  RequestBodySchema extends AnyZodObject,
+  RequestQuerySchema extends ObjectSchema | undefined,
+  RequestBodySchema extends ObjectSchema,
   ResponseHeadersSchema extends HeadersSchema | undefined,
-  ResponseBodySchema extends AnyZodObject,
+  ResponseBodySchema extends ObjectSchema,
 > = {
   request: RequestWithBodySchema<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema, RequestBodySchema>;
   response: ResponseWithBodySchema<ResponseHeadersSchema, ResponseBodySchema>;
@@ -114,8 +110,8 @@ type WithRequestAndResponse<
 type WithRequestOnly<
   RequestAttributesSchema extends ContentTypeAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
-  RequestBodySchema extends AnyZodObject,
+  RequestQuerySchema extends ObjectSchema | undefined,
+  RequestBodySchema extends ObjectSchema,
   ResponseHeadersSchema extends HeadersSchema | undefined,
 > = {
   request: RequestWithBodySchema<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema, RequestBodySchema>;
@@ -134,9 +130,9 @@ type WithRequestOnly<
 type WithResponseOnly<
   RequestAttributesSchema extends AcceptAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
+  RequestQuerySchema extends ObjectSchema | undefined,
   ResponseHeadersSchema extends HeadersSchema | undefined,
-  ResponseBodySchema extends AnyZodObject,
+  ResponseBodySchema extends ObjectSchema,
 > = {
   request: RequestSchema<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema>;
   response: ResponseWithBodySchema<ResponseHeadersSchema, ResponseBodySchema>;
@@ -147,9 +143,9 @@ type WithResponseOnly<
 };
 
 type WithNeither<
-  RequestAttributesSchema extends AnyZodObject,
+  RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
+  RequestQuerySchema extends ObjectSchema | undefined,
   ResponseHeadersSchema extends HeadersSchema | undefined,
 > = {
   request: RequestSchema<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema>;
@@ -160,15 +156,15 @@ type WithNeither<
 };
 
 export type TypedHandlerConfig<
-  RequestAttributesSchema extends AnyZodObject | undefined,
+  RequestAttributesSchema extends ObjectSchema | undefined,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
-  RequestBodySchema extends AnyZodObject | undefined,
+  RequestQuerySchema extends ObjectSchema | undefined,
+  RequestBodySchema extends ObjectSchema | undefined,
   ResponseHeadersSchema extends HeadersSchema | undefined,
-  ResponseBodySchema extends AnyZodObject | undefined,
+  ResponseBodySchema extends ObjectSchema | undefined,
 > = RequestAttributesSchema extends ContentTypeAndAcceptAttributesSchema
-  ? RequestBodySchema extends AnyZodObject
-    ? ResponseBodySchema extends AnyZodObject
+  ? RequestBodySchema extends ObjectSchema
+    ? ResponseBodySchema extends ObjectSchema
       ? WithRequestAndResponse<
           RequestAttributesSchema,
           RequestHeadersSchema,
@@ -180,7 +176,7 @@ export type TypedHandlerConfig<
       : never
     : never
   : RequestAttributesSchema extends ContentTypeAttributesSchema
-    ? RequestBodySchema extends AnyZodObject
+    ? RequestBodySchema extends ObjectSchema
       ? ResponseBodySchema extends undefined
         ? WithRequestOnly<
             RequestAttributesSchema,
@@ -193,7 +189,7 @@ export type TypedHandlerConfig<
       : never
     : RequestAttributesSchema extends AcceptAttributesSchema
       ? RequestBodySchema extends undefined
-        ? ResponseBodySchema extends AnyZodObject
+        ? ResponseBodySchema extends ObjectSchema
           ? WithResponseOnly<
               RequestAttributesSchema,
               RequestHeadersSchema,
@@ -203,7 +199,7 @@ export type TypedHandlerConfig<
             >
           : never
         : never
-      : RequestAttributesSchema extends AnyZodObject
+      : RequestAttributesSchema extends ObjectSchema
         ? RequestBodySchema extends undefined
           ? ResponseBodySchema extends undefined
             ? WithNeither<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema, ResponseHeadersSchema>
@@ -211,13 +207,71 @@ export type TypedHandlerConfig<
           : never
         : never;
 
+const resolveRequestHeaders = (
+  serverRequest: ServerRequest,
+  request: { headers?: HeadersSchema },
+): z.output<HeadersSchema> => {
+  if (undefined === request.headers) {
+    return {};
+  }
+
+  const requestHeadersResult = request.headers.safeParse(Object.fromEntries(serverRequest.headers.entries()));
+
+  if (!requestHeadersResult.success) {
+    throw createBadRequest({
+      invalidParameters: zodToInvalidParameters(requestHeadersResult.error),
+      context: 'headers',
+    });
+  }
+
+  return requestHeadersResult.data;
+};
+
+const resolveRequestQuery = (
+  serverRequest: ServerRequest,
+  request: { query?: ObjectSchema },
+): z.output<ObjectSchema> => {
+  if (undefined === request.query) {
+    return {};
+  }
+
+  const requestQueryResult = request.query.safeParse(parse(new URL(serverRequest.url).search.substring(1)));
+
+  if (!requestQueryResult.success) {
+    throw createBadRequest({
+      invalidParameters: zodToInvalidParameters(requestQueryResult.error),
+      context: 'query',
+    });
+  }
+
+  return requestQueryResult.data;
+};
+
+const resolveRequestBody = async (
+  serverRequest: ServerRequest,
+  decoder: Decoder,
+  contentType: string,
+  body: ObjectSchema,
+): Promise<z.output<ObjectSchema>> => {
+  const requestBodyResult = body.safeParse(decoder.decode(await serverRequest.text(), contentType));
+
+  if (!requestBodyResult.success) {
+    throw createBadRequest({
+      invalidParameters: zodToInvalidParameters(requestBodyResult.error),
+      context: 'body',
+    });
+  }
+
+  return requestBodyResult.data;
+};
+
 export function createTypedHandler<
   RequestAttributesSchema extends ContentTypeAndAcceptAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined = undefined,
-  RequestQuerySchema extends AnyZodObject | undefined = undefined,
-  RequestBodySchema extends AnyZodObject = AnyZodObject,
+  RequestQuerySchema extends ObjectSchema | undefined = undefined,
+  RequestBodySchema extends ObjectSchema = ObjectSchema,
   ResponseHeadersSchema extends HeadersSchema | undefined = undefined,
-  ResponseBodySchema extends AnyZodObject = AnyZodObject,
+  ResponseBodySchema extends ObjectSchema = ObjectSchema,
 >(
   _: WithRequestAndResponse<
     RequestAttributesSchema,
@@ -231,8 +285,8 @@ export function createTypedHandler<
 export function createTypedHandler<
   RequestAttributesSchema extends ContentTypeAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined = undefined,
-  RequestQuerySchema extends AnyZodObject | undefined = undefined,
-  RequestBodySchema extends AnyZodObject = AnyZodObject,
+  RequestQuerySchema extends ObjectSchema | undefined = undefined,
+  RequestBodySchema extends ObjectSchema = ObjectSchema,
   ResponseHeadersSchema extends HeadersSchema | undefined = undefined,
 >(
   _: WithRequestOnly<
@@ -246,9 +300,9 @@ export function createTypedHandler<
 export function createTypedHandler<
   RequestAttributesSchema extends AcceptAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined = undefined,
-  RequestQuerySchema extends AnyZodObject | undefined = undefined,
+  RequestQuerySchema extends ObjectSchema | undefined = undefined,
   ResponseHeadersSchema extends HeadersSchema | undefined = undefined,
-  ResponseBodySchema extends AnyZodObject = AnyZodObject,
+  ResponseBodySchema extends ObjectSchema = ObjectSchema,
 >(
   _: WithResponseOnly<
     RequestAttributesSchema,
@@ -259,18 +313,18 @@ export function createTypedHandler<
   >,
 ): Handler;
 export function createTypedHandler<
-  RequestAttributesSchema extends AnyZodObject,
+  RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined = undefined,
-  RequestQuerySchema extends AnyZodObject | undefined = undefined,
+  RequestQuerySchema extends ObjectSchema | undefined = undefined,
   ResponseHeadersSchema extends HeadersSchema | undefined = undefined,
 >(_: WithNeither<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema, ResponseHeadersSchema>): Handler;
 export function createTypedHandler<
-  RequestAttributesSchema extends AnyZodObject,
+  RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
-  RequestQuerySchema extends AnyZodObject | undefined,
-  RequestBodySchema extends AnyZodObject | undefined,
+  RequestQuerySchema extends ObjectSchema | undefined,
+  RequestBodySchema extends ObjectSchema | undefined,
   ResponseHeadersSchema extends HeadersSchema | undefined,
-  ResponseBodySchema extends AnyZodObject | undefined,
+  ResponseBodySchema extends ObjectSchema | undefined,
 >(
   _: TypedHandlerConfig<
     RequestAttributesSchema,
@@ -281,64 +335,6 @@ export function createTypedHandler<
     ResponseBodySchema
   >,
 ): Handler {
-  const resolveRequestHeaders = (
-    serverRequest: ServerRequest,
-    request: { attributes: AnyZodObject; headers?: HeadersSchema },
-  ): z.output<RequestHeadersSchema> => {
-    if (undefined === request.headers) {
-      return {} as z.output<RequestHeadersSchema>;
-    }
-
-    const requestHeadersResult = request.headers.safeParse(Object.fromEntries(serverRequest.headers.entries()));
-
-    if (!requestHeadersResult.success) {
-      throw createBadRequest({
-        invalidParameters: zodToInvalidParameters(requestHeadersResult.error),
-        context: 'headers',
-      });
-    }
-
-    return requestHeadersResult.data as z.output<RequestHeadersSchema>;
-  };
-
-  const resolveRequestQuery = (
-    serverRequest: ServerRequest,
-    request: { attributes: AnyZodObject; query?: AnyZodObject },
-  ): z.output<RequestQuerySchema> => {
-    if (undefined === request.query) {
-      return {} as z.output<RequestQuerySchema>;
-    }
-
-    const requestQueryResult = request.query.safeParse(parse(new URL(serverRequest.url).search.substring(1)));
-
-    if (!requestQueryResult.success) {
-      throw createBadRequest({
-        invalidParameters: zodToInvalidParameters(requestQueryResult.error),
-        context: 'query',
-      });
-    }
-
-    return requestQueryResult.data as z.output<RequestQuerySchema>;
-  };
-
-  const resolveRequestBody = async (
-    serverRequest: ServerRequest,
-    decoder: Decoder,
-    contentType: string,
-    body: NonNullable<RequestBodySchema>,
-  ): Promise<z.output<NonNullable<RequestBodySchema>>> => {
-    const requestBodyResult = body.safeParse(decoder.decode(await serverRequest.text(), contentType));
-
-    if (!requestBodyResult.success) {
-      throw createBadRequest({
-        invalidParameters: zodToInvalidParameters(requestBodyResult.error),
-        context: 'body',
-      });
-    }
-
-    return requestBodyResult.data as z.output<NonNullable<RequestBodySchema>>;
-  };
-
   return async (serverRequest: ServerRequest): Promise<Response> => {
     if (
       'decoder' in _ &&
@@ -352,11 +348,11 @@ export function createTypedHandler<
     ) {
       const config = _ as WithRequestAndResponse<
         ContentTypeAndAcceptAttributesSchema,
-        RequestHeadersSchema,
-        RequestQuerySchema,
-        NonNullable<RequestBodySchema>,
-        ResponseHeadersSchema,
-        NonNullable<ResponseBodySchema>
+        HeadersSchema | undefined,
+        ObjectSchema | undefined,
+        ObjectSchema,
+        HeadersSchema | undefined,
+        ObjectSchema
       >;
       const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
 
@@ -388,10 +384,10 @@ export function createTypedHandler<
     if ('decoder' in _ && undefined !== _.decoder && 'body' in _.request && undefined !== _.request.body) {
       const config = _ as WithRequestOnly<
         ContentTypeAttributesSchema,
-        RequestHeadersSchema,
-        RequestQuerySchema,
-        NonNullable<RequestBodySchema>,
-        ResponseHeadersSchema
+        HeadersSchema | undefined,
+        ObjectSchema | undefined,
+        ObjectSchema,
+        HeadersSchema | undefined
       >;
 
       const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
@@ -420,10 +416,10 @@ export function createTypedHandler<
     if ('encoder' in _ && undefined !== _.encoder && 'body' in _.response && undefined !== _.response.body) {
       const config = _ as WithResponseOnly<
         AcceptAttributesSchema,
-        RequestHeadersSchema,
-        RequestQuerySchema,
-        ResponseHeadersSchema,
-        NonNullable<ResponseBodySchema>
+        HeadersSchema | undefined,
+        ObjectSchema | undefined,
+        HeadersSchema | undefined,
+        ObjectSchema
       >;
 
       const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
@@ -447,7 +443,12 @@ export function createTypedHandler<
       );
     }
 
-    const config = _ as WithNeither<AnyZodObject, RequestHeadersSchema, RequestQuerySchema, ResponseHeadersSchema>;
+    const config = _ as WithNeither<
+      ObjectSchema,
+      HeadersSchema | undefined,
+      ObjectSchema | undefined,
+      HeadersSchema | undefined
+    >;
 
     const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
 
