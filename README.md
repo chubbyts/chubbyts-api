@@ -125,7 +125,7 @@ export const enrichedPetListSchema: EnrichedModelListSchema<InputPetSchema, Inpu
 export type EnrichedPetList = EnrichedModelList<InputPetSchema, InputPetListSchema>;
 ```
 
-Reusable field schemas: `stringSchema` (non-empty string), `numberSchema` and `dateSchema` (pipes that coerce their input, so they accept query string values) and `sortSchema` (optional picklist of `'asc' | 'desc'`). Input schemas can be `v.object`, `v.strictObject` or `v.looseObject`; the derived schemas are always strict.
+Reusable field schemas: `stringSchema` (non-empty string), `numberSchema` and `dateSchema` (pipes that coerce their input, so they accept query string values) and `sortSchema` (optional picklist of `'asc' | 'desc'`). Input schemas can be `v.object`, `v.strictObject`, `v.looseObject` or `v.objectWithRest`; the derived schemas are always strict (only the `entries` are carried over, any rest schema is dropped).
 
 To type `_embedded`, pass an embedded schema as the last argument of `createEnrichedModelSchema` / `createEnrichedModelListSchema`. See the [typed handler guide][20] for an example with embedded vaccinations.
 

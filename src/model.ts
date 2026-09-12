@@ -18,7 +18,8 @@ export type Sort = v.InferOutput<SortSchema>;
 export type AnyObjectSchema =
   | v.ObjectSchema<v.ObjectEntries, v.ErrorMessage<v.ObjectIssue> | undefined>
   | v.StrictObjectSchema<v.ObjectEntries, v.ErrorMessage<v.StrictObjectIssue> | undefined>
-  | v.LooseObjectSchema<v.ObjectEntries, v.ErrorMessage<v.LooseObjectIssue> | undefined>;
+  | v.LooseObjectSchema<v.ObjectEntries, v.ErrorMessage<v.LooseObjectIssue> | undefined>
+  | v.ObjectWithRestSchema<v.ObjectEntries, v.GenericSchema, v.ErrorMessage<v.ObjectWithRestIssue> | undefined>;
 
 const embeddedSchema = v.optional(v.looseObject({}));
 
