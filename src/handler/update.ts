@@ -2,7 +2,7 @@ import { STATUS_CODES } from 'node:http';
 import { createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder/encoder';
 import type { Decoder } from '@chubbyts/chubbyts-decode-encode/dist/decoder/decoder';
-import { z } from 'zod';
+import * as v from 'valibot';
 import type { Handler } from '@chubbyts/chubbyts-undici-server/dist/server';
 import type { FindModelById, PersistModel } from '../repository.js';
 import type { EmbeddedSchema, EnrichedModel, EnrichModel, EnrichedModelSchema, InputModelSchema } from '../model.js';
@@ -19,7 +19,7 @@ export const createUpdateHandler = <IMS extends InputModelSchema, EMS extends Em
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ contentType: z.string(), accept: z.string(), id: z.string() }),
+      attributes: v.object({ contentType: v.string(), accept: v.string(), id: v.string() }),
       body: inputModelSchema,
     },
     response: {

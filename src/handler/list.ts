@@ -1,7 +1,7 @@
 import { STATUS_CODES } from 'node:http';
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder/encoder';
 import type { Handler } from '@chubbyts/chubbyts-undici-server/dist/server';
-import { z } from 'zod';
+import * as v from 'valibot';
 import type { ResolveModelList } from '../repository.js';
 import type {
   EmbeddedSchema,
@@ -28,7 +28,7 @@ export const createListHandler = <
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ accept: z.string() }),
+      attributes: v.object({ accept: v.string() }),
       query: inputModelListSchema,
     },
     response: {

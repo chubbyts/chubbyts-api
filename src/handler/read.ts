@@ -1,7 +1,7 @@
 import { STATUS_CODES } from 'node:http';
 import { createNotFound } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder/encoder';
-import { z } from 'zod';
+import * as v from 'valibot';
 import type { Handler } from '@chubbyts/chubbyts-undici-server/dist/server';
 import type { FindModelById } from '../repository.js';
 import type { EmbeddedSchema, EnrichedModel, EnrichedModelSchema, EnrichModel, InputModelSchema } from '../model.js';
@@ -15,7 +15,7 @@ export const createReadHandler = <IMS extends InputModelSchema, EMS extends Embe
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ accept: z.string(), id: z.string() }),
+      attributes: v.object({ accept: v.string(), id: v.string() }),
     },
     response: {
       body: enrichedModelSchema,

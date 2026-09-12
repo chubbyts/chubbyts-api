@@ -3,7 +3,7 @@ import type { HttpError } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import { describe, expect, test } from 'vitest';
 import { useFunctionMock } from '@chubbyts/chubbyts-function-mock/dist/function-mock';
 import { useObjectMock } from '@chubbyts/chubbyts-function-mock/dist/object-mock';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
 import { createReadHandler } from '../../src/handler/read';
 import { createEnrichedModelSchema, stringSchema, type EnrichModel, type Model } from '../../src/model';
@@ -11,7 +11,7 @@ import type { FindModelById } from '../../src/repository';
 
 describe('read', () => {
   describe('createReadHandler', () => {
-    const inputModelSchema = z.object({ name: stringSchema });
+    const inputModelSchema = v.object({ name: stringSchema });
     const enrichedModelSchema = createEnrichedModelSchema(inputModelSchema);
 
     test('successfully', async () => {

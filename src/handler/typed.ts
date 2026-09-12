@@ -3,22 +3,25 @@ import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
 import { createBadRequest } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import type { Handler, ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
 import { Response } from '@chubbyts/chubbyts-undici-server/dist/server';
-import { parse } from 'qs';
-import type { z } from 'zod';
-import { zodToInvalidParameters } from '../zod-to-invalid-parameters.js';
+import { parse as parseQuery } from 'qs';
+import type { GenericSchema, InferOutput } from 'valibot';
+import { parse as parseSchema, safeParse } from 'valibot';
+import { valibotToInvalidParameters } from '../valibot-to-invalid-parameters.js';
 import { valueToData } from '../response.js';
 
-type ObjectSchema = z.ZodType<{ [key: string]: unknown }>;
+type ObjectSchema = GenericSchema<unknown, { [key: string]: unknown }>;
 
-type HeadersSchema = z.ZodType<{ [key: string]: string }>;
+type HeadersSchema = GenericSchema<unknown, { [key: string]: string }>;
 
-type ContentTypeAttributesSchema = z.ZodType<{ contentType: string }>;
+type ContentTypeAttributesSchema = GenericSchema<unknown, { contentType: string }>;
 
-type AcceptAttributesSchema = z.ZodType<{ accept: string }>;
+type AcceptAttributesSchema = GenericSchema<unknown, { accept: string }>;
 
-type ContentTypeAndAcceptAttributesSchema = z.ZodType<{ contentType: string; accept: string }>;
+type ContentTypeAndAcceptAttributesSchema = GenericSchema<unknown, { contentType: string; accept: string }>;
 
-type ResponseOutput<S> = S extends z.ZodType ? z.output<S> : { [key: string]: never };
+type RequestOutput<S> = S extends GenericSchema ? InferOutput<S> : Record<never, never>;
+
+type ResponseOutput<S> = S extends GenericSchema ? InferOutput<S> : { [key: string]: never };
 
 type RequestSchema<
   RequestAttributesSchema extends ObjectSchema,
@@ -55,9 +58,9 @@ type HandlerRequest<
   RequestHeadersSchema extends HeadersSchema | undefined,
   RequestQuerySchema extends ObjectSchema | undefined,
 > = {
-  attributes: z.output<RequestAttributesSchema>;
-  headers: z.output<RequestHeadersSchema>;
-  query: z.output<RequestQuerySchema>;
+  attributes: InferOutput<RequestAttributesSchema>;
+  headers: RequestOutput<RequestHeadersSchema>;
+  query: RequestOutput<RequestQuerySchema>;
 };
 
 type HandlerRequestWithBody<
@@ -66,7 +69,7 @@ type HandlerRequestWithBody<
   RequestQuerySchema extends ObjectSchema | undefined,
   RequestBodySchema extends ObjectSchema,
 > = HandlerRequest<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema> & {
-  body: z.output<RequestBodySchema>;
+  body: InferOutput<RequestBodySchema>;
 };
 
 type HandlerResponseBase<ResponseHeadersSchema extends HeadersSchema | undefined> = {
@@ -85,7 +88,7 @@ type HandlerResponse<ResponseHeadersSchema extends HeadersSchema | undefined, Re
   ? Promise<HandlerResponseBase<ResponseHeadersSchema>>
   : HandlerResponseWithBody<ResponseHeadersSchema, ResponseBody>;
 
-type WithRequestAndResponse<
+export type WithRequestAndResponse<
   RequestAttributesSchema extends ContentTypeAndAcceptAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
   RequestQuerySchema extends ObjectSchema | undefined,
@@ -102,12 +105,12 @@ type WithRequestAndResponse<
       RequestQuerySchema,
       RequestBodySchema
     >,
-  ) => HandlerResponseWithBody<ResponseHeadersSchema, z.output<ResponseBodySchema>>;
+  ) => HandlerResponseWithBody<ResponseHeadersSchema, InferOutput<ResponseBodySchema>>;
   decoder: Decoder;
   encoder: Encoder;
 };
 
-type WithRequestOnly<
+export type WithRequestOnly<
   RequestAttributesSchema extends ContentTypeAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
   RequestQuerySchema extends ObjectSchema | undefined,
@@ -127,7 +130,7 @@ type WithRequestOnly<
   decoder: Decoder;
 };
 
-type WithResponseOnly<
+export type WithResponseOnly<
   RequestAttributesSchema extends AcceptAttributesSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
   RequestQuerySchema extends ObjectSchema | undefined,
@@ -138,11 +141,11 @@ type WithResponseOnly<
   response: ResponseWithBodySchema<ResponseHeadersSchema, ResponseBodySchema>;
   handler: (
     request: HandlerRequest<RequestAttributesSchema, RequestHeadersSchema, RequestQuerySchema>,
-  ) => HandlerResponseWithBody<ResponseHeadersSchema, z.output<ResponseBodySchema>>;
+  ) => HandlerResponseWithBody<ResponseHeadersSchema, InferOutput<ResponseBodySchema>>;
   encoder: Encoder;
 };
 
-type WithNeither<
+export type WithNeither<
   RequestAttributesSchema extends ObjectSchema,
   RequestHeadersSchema extends HeadersSchema | undefined,
   RequestQuerySchema extends ObjectSchema | undefined,
@@ -210,41 +213,41 @@ export type TypedHandlerConfig<
 const resolveRequestHeaders = (
   serverRequest: ServerRequest,
   request: { headers?: HeadersSchema },
-): z.output<HeadersSchema> => {
+): InferOutput<HeadersSchema> => {
   if (undefined === request.headers) {
     return {};
   }
 
-  const requestHeadersResult = request.headers.safeParse(Object.fromEntries(serverRequest.headers.entries()));
+  const requestHeadersResult = safeParse(request.headers, Object.fromEntries(serverRequest.headers.entries()));
 
   if (!requestHeadersResult.success) {
     throw createBadRequest({
-      invalidParameters: zodToInvalidParameters(requestHeadersResult.error),
+      invalidParameters: valibotToInvalidParameters(requestHeadersResult.issues),
       context: 'headers',
     });
   }
 
-  return requestHeadersResult.data;
+  return requestHeadersResult.output;
 };
 
 const resolveRequestQuery = (
   serverRequest: ServerRequest,
   request: { query?: ObjectSchema },
-): z.output<ObjectSchema> => {
+): InferOutput<ObjectSchema> => {
   if (undefined === request.query) {
     return {};
   }
 
-  const requestQueryResult = request.query.safeParse(parse(new URL(serverRequest.url).search.substring(1)));
+  const requestQueryResult = safeParse(request.query, parseQuery(new URL(serverRequest.url).search.substring(1)));
 
   if (!requestQueryResult.success) {
     throw createBadRequest({
-      invalidParameters: zodToInvalidParameters(requestQueryResult.error),
+      invalidParameters: valibotToInvalidParameters(requestQueryResult.issues),
       context: 'query',
     });
   }
 
-  return requestQueryResult.data;
+  return requestQueryResult.output;
 };
 
 const resolveRequestBody = async (
@@ -252,17 +255,17 @@ const resolveRequestBody = async (
   decoder: Decoder,
   contentType: string,
   body: ObjectSchema,
-): Promise<z.output<ObjectSchema>> => {
-  const requestBodyResult = body.safeParse(decoder.decode(await serverRequest.text(), contentType));
+): Promise<InferOutput<ObjectSchema>> => {
+  const requestBodyResult = safeParse(body, decoder.decode(await serverRequest.text(), contentType));
 
   if (!requestBodyResult.success) {
     throw createBadRequest({
-      invalidParameters: zodToInvalidParameters(requestBodyResult.error),
+      invalidParameters: valibotToInvalidParameters(requestBodyResult.issues),
       context: 'body',
     });
   }
 
-  return requestBodyResult.data;
+  return requestBodyResult.output;
 };
 
 export function createTypedHandler<
@@ -354,7 +357,7 @@ export function createTypedHandler<
         HeadersSchema | undefined,
         ObjectSchema
       >;
-      const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
+      const requestAttributes = parseSchema(config.request.attributes, serverRequest.attributes);
 
       const typedResponse = await config.handler({
         attributes: requestAttributes,
@@ -369,13 +372,16 @@ export function createTypedHandler<
       });
 
       return new Response(
-        config.encoder.encode(valueToData(config.response.body.parse(typedResponse.body)), requestAttributes.accept),
+        config.encoder.encode(
+          valueToData(parseSchema(config.response.body, typedResponse.body)),
+          requestAttributes.accept,
+        ),
         {
           status: typedResponse.status,
           statusText: typedResponse.statusText,
           headers: {
             'content-type': requestAttributes.accept,
-            ...(config.response.headers ? config.response.headers.parse(typedResponse.headers) : {}),
+            ...(config.response.headers ? parseSchema(config.response.headers, typedResponse.headers) : {}),
           },
         },
       );
@@ -390,7 +396,7 @@ export function createTypedHandler<
         HeadersSchema | undefined
       >;
 
-      const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
+      const requestAttributes = parseSchema(config.request.attributes, serverRequest.attributes);
 
       const typedResponse = await config.handler({
         attributes: requestAttributes,
@@ -408,7 +414,7 @@ export function createTypedHandler<
         status: typedResponse.status,
         statusText: typedResponse.statusText,
         headers: {
-          ...(config.response.headers ? config.response.headers.parse(typedResponse.headers) : {}),
+          ...(config.response.headers ? parseSchema(config.response.headers, typedResponse.headers) : {}),
         },
       });
     }
@@ -422,7 +428,7 @@ export function createTypedHandler<
         ObjectSchema
       >;
 
-      const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
+      const requestAttributes = parseSchema(config.request.attributes, serverRequest.attributes);
 
       const typedResponse = await config.handler({
         attributes: requestAttributes,
@@ -431,13 +437,16 @@ export function createTypedHandler<
       });
 
       return new Response(
-        config.encoder.encode(valueToData(config.response.body.parse(typedResponse.body)), requestAttributes.accept),
+        config.encoder.encode(
+          valueToData(parseSchema(config.response.body, typedResponse.body)),
+          requestAttributes.accept,
+        ),
         {
           status: typedResponse.status,
           statusText: typedResponse.statusText,
           headers: {
             'content-type': requestAttributes.accept,
-            ...(config.response.headers ? config.response.headers.parse(typedResponse.headers) : {}),
+            ...(config.response.headers ? parseSchema(config.response.headers, typedResponse.headers) : {}),
           },
         },
       );
@@ -450,7 +459,7 @@ export function createTypedHandler<
       HeadersSchema | undefined
     >;
 
-    const requestAttributes = config.request.attributes.parse(serverRequest.attributes);
+    const requestAttributes = parseSchema(config.request.attributes, serverRequest.attributes);
 
     const typedResponse = await config.handler({
       attributes: requestAttributes,
@@ -462,7 +471,7 @@ export function createTypedHandler<
       status: typedResponse.status,
       statusText: typedResponse.statusText,
       headers: {
-        ...(config.response.headers ? config.response.headers.parse(typedResponse.headers) : {}),
+        ...(config.response.headers ? parseSchema(config.response.headers, typedResponse.headers) : {}),
       },
     });
   };

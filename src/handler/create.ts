@@ -3,7 +3,7 @@ import { v7 } from 'uuid';
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder/encoder';
 import type { Decoder } from '@chubbyts/chubbyts-decode-encode/dist/decoder/decoder';
 import type { Handler } from '@chubbyts/chubbyts-undici-server/dist/server';
-import { z } from 'zod';
+import * as v from 'valibot';
 import type { PersistModel } from '../repository.js';
 import type { EmbeddedSchema, EnrichedModel, EnrichedModelSchema, EnrichModel, InputModelSchema } from '../model.js';
 import { createTypedHandler } from './typed.js';
@@ -19,7 +19,7 @@ export const createCreateHandler = <IMS extends InputModelSchema, EMS extends Em
 ): Handler => {
   return createTypedHandler({
     request: {
-      attributes: z.object({ contentType: z.string(), accept: z.string() }),
+      attributes: v.object({ contentType: v.string(), accept: v.string() }),
       body: inputModelSchema,
     },
     response: {

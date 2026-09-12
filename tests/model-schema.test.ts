@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { createModelSchema, stringSchema } from '../src/model';
 
 describe('createModelSchema', () => {
   test('creates a usable model schema', async () => {
-    const modelSchema = createModelSchema(z.object({ name: stringSchema }).strict());
+    const modelSchema = createModelSchema(v.strictObject({ name: stringSchema }));
 
-    expect(modelSchema.parse({ id: 'id1', createdAt: new Date('2025-07-15T10:00:00.000Z'), name: 'test1' }))
+    expect(v.parse(modelSchema, { id: 'id1', createdAt: new Date('2025-07-15T10:00:00.000Z'), name: 'test1' }))
       .toMatchInlineSnapshot(`
         {
           "createdAt": 2025-07-15T10:00:00.000Z,

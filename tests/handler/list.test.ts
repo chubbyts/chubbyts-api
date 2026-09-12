@@ -1,7 +1,7 @@
 import type { Encoder } from '@chubbyts/chubbyts-decode-encode/dist/encoder';
 import type { HttpError } from '@chubbyts/chubbyts-http-error/dist/http-error';
 import { describe, expect, test } from 'vitest';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { useFunctionMock } from '@chubbyts/chubbyts-function-mock/dist/function-mock';
 import { useObjectMock } from '@chubbyts/chubbyts-function-mock/dist/object-mock';
 import { ServerRequest } from '@chubbyts/chubbyts-undici-server/dist/server';
@@ -20,17 +20,15 @@ import type { ResolveModelList } from '../../src/repository';
 
 describe('list', () => {
   describe('createListHandler', () => {
-    const inputModelSchema = z.object({ name: stringSchema }).strict();
-    const embeddedModelSchema = z.object({ key1: stringSchema }).optional();
-    const inputModelListSchema = z
-      .object({
-        offset: numberSchema.default(0),
-        limit: numberSchema.default(20),
-        filters: z.object({ name: stringSchema.optional() }).strict().default({}),
-        sort: z.object({ name: sortSchema }).strict().default({}),
-      })
-      .strict();
-    const embeddedModelListSchema = z.object({ key2: stringSchema }).optional();
+    const inputModelSchema = v.strictObject({ name: stringSchema });
+    const embeddedModelSchema = v.optional(v.object({ key1: stringSchema }));
+    const inputModelListSchema = v.strictObject({
+      offset: v.optional(numberSchema, 0),
+      limit: v.optional(numberSchema, 20),
+      filters: v.optional(v.strictObject({ name: v.optional(stringSchema) }), {}),
+      sort: v.optional(v.strictObject({ name: sortSchema }), {}),
+    });
+    const embeddedModelListSchema = v.optional(v.object({ key2: stringSchema }));
 
     const enrichedModelListSchema = createEnrichedModelListSchema(
       inputModelSchema,
@@ -344,14 +342,14 @@ describe('list', () => {
             "context": "query",
             "invalidParameters": [
               {
-                "context": {
-                  "code": "unrecognized_keys",
-                  "keys": [
-                    "key",
-                  ],
+                "details": {
+                  "expected": "never",
+                  "kind": "schema",
+                  "received": ""key"",
+                  "type": "strict_object",
                 },
-                "name": "filters",
-                "reason": "Unrecognized key: "key"",
+                "name": "filters[key]",
+                "reason": "Invalid key: Expected never but received "key"",
               },
             ],
             "status": 400,

@@ -1,60 +1,70 @@
-import { z } from 'zod';
+import * as v from 'valibot';
 
-export const stringSchema = z.string().min(1);
-export const numberSchema = z.coerce.number();
-export const dateSchema = z.coerce.date();
+export const stringSchema = v.pipe(v.string(), v.minLength(1));
+export const numberSchema = v.pipe(v.unknown(), v.transform(Number), v.number());
+export const dateSchema = v.pipe(
+  v.unknown(),
+  v.transform((input) => new Date(input as string | number | Date)),
+  v.date(),
+);
 
-type NumberSchema = z.ZodType<number>;
-type DateSchema = z.ZodType<Date>;
+type DateSchema = v.GenericSchema<unknown, Date>;
 
-export const sortSchema = z.union([z.literal('asc'), z.literal('desc')]).optional();
+export const sortSchema = v.optional(v.picklist(['asc', 'desc']));
 
 export type SortSchema = typeof sortSchema;
-export type Sort = z.output<SortSchema>;
+export type Sort = v.InferOutput<SortSchema>;
 
-export type AnyZodObject = z.ZodObject<z.ZodRawShape>;
+export type AnyObjectSchema =
+  | v.ObjectSchema<v.ObjectEntries, v.ErrorMessage<v.ObjectIssue> | undefined>
+  | v.StrictObjectSchema<v.ObjectEntries, v.ErrorMessage<v.StrictObjectIssue> | undefined>
+  | v.LooseObjectSchema<v.ObjectEntries, v.ErrorMessage<v.LooseObjectIssue> | undefined>;
 
-const embeddedSchema = z.object({}).loose().optional();
+const embeddedSchema = v.optional(v.looseObject({}));
 
-export type EmbeddedSchema = z.ZodOptional<z.ZodType<{ [key: string]: unknown }>>;
+export type EmbeddedSchema = v.OptionalSchema<AnyObjectSchema, undefined>;
 
-const linkSchema = z.intersection(
-  z.object({
-    href: z.string(),
-    name: z.string().optional(),
-    templated: z.boolean().optional(),
+const linkSchema = v.intersect([
+  v.object({
+    href: v.string(),
+    name: v.optional(v.string()),
+    templated: v.optional(v.boolean()),
   }),
-  z.record(z.string(), z.unknown()),
-);
+  v.record(v.string(), v.unknown()),
+]);
 
 type LinkSchema = typeof linkSchema;
 
-export type Link = z.output<LinkSchema>;
+export type Link = v.InferOutput<LinkSchema>;
 
-const linksSchema = z.record(z.string(), z.union([linkSchema, z.array(linkSchema)])).optional();
+const linksSchema = v.optional(v.record(v.string(), v.union([linkSchema, v.array(linkSchema)])));
 
 type LinksSchema = typeof linksSchema;
 
-export type InputModelSchema = AnyZodObject;
+export type InputModelSchema = AnyObjectSchema;
 
-export type InputModel<IMS extends InputModelSchema> = z.output<IMS>;
+export type InputModel<IMS extends InputModelSchema> = v.InferOutput<IMS>;
 
-type ModelShape<IMS extends InputModelSchema> = IMS['shape'] & {
+type ModelEntries<IMS extends InputModelSchema> = IMS['entries'] & {
   id: typeof stringSchema;
   createdAt: DateSchema;
-  updatedAt: z.ZodOptional<DateSchema>;
+  updatedAt: v.OptionalSchema<DateSchema, undefined>;
 };
 
-export type InputModelListSchema = z.ZodObject<{
-  offset: NumberSchema;
-  limit: NumberSchema;
-  filters: z.ZodType<{ [key: string]: unknown }>;
-  sort: z.ZodType<{ [key: string]: Sort }>;
-}>;
+export type InputModelListSchema = AnyObjectSchema &
+  v.GenericSchema<
+    unknown,
+    {
+      offset: number;
+      limit: number;
+      filters: { [key: string]: unknown };
+      sort: { [key: string]: Sort };
+    }
+  >;
 
-export type InputModelList<IMLS extends InputModelListSchema> = z.output<IMLS>;
+export type InputModelList<IMLS extends InputModelListSchema> = v.InferOutput<IMLS>;
 
-export type ModelSchema<IMS extends InputModelSchema> = z.ZodObject<ModelShape<IMS>>;
+export type ModelSchema<IMS extends InputModelSchema> = v.StrictObjectSchema<ModelEntries<IMS>, undefined>;
 
 export type Model<IMS extends InputModelSchema> = InputModel<IMS> & {
   id: string;
@@ -63,17 +73,21 @@ export type Model<IMS extends InputModelSchema> = InputModel<IMS> & {
 };
 
 export const createModelSchema = <IMS extends InputModelSchema>(inputModelSchema: IMS): ModelSchema<IMS> =>
-  z
-    .object({ ...inputModelSchema.shape, id: stringSchema, createdAt: dateSchema, updatedAt: dateSchema.optional() })
-    .strict();
+  v.strictObject<ModelEntries<IMS>>({
+    ...inputModelSchema.entries,
+    id: stringSchema,
+    createdAt: dateSchema,
+    updatedAt: v.optional(dateSchema),
+  });
 
-type ModelListShape<IMS extends InputModelSchema, IMLS extends InputModelListSchema> = IMLS['shape'] & {
+type ModelListEntries<IMS extends InputModelSchema, IMLS extends InputModelListSchema> = IMLS['entries'] & {
   count: typeof numberSchema;
-  items: z.ZodArray<ModelSchema<IMS>>;
+  items: v.ArraySchema<ModelSchema<IMS>, undefined>;
 };
 
-export type ModelListSchema<IMS extends InputModelSchema, IMLS extends InputModelListSchema> = z.ZodObject<
-  ModelListShape<IMS, IMLS>
+export type ModelListSchema<IMS extends InputModelSchema, IMLS extends InputModelListSchema> = v.StrictObjectSchema<
+  ModelListEntries<IMS, IMLS>,
+  undefined
 >;
 
 export type ModelList<IMS extends InputModelSchema, IMLS extends InputModelListSchema> = InputModelList<IMLS> & {
@@ -85,15 +99,16 @@ export const createModelListSchema = <IMS extends InputModelSchema, IMLS extends
   inputModelSchema: IMS,
   inputModelListSchema: IMLS,
 ): ModelListSchema<IMS, IMLS> =>
-  z
-    .object({
-      ...inputModelListSchema.shape,
-      count: numberSchema,
-      items: z.array(createModelSchema(inputModelSchema)),
-    })
-    .strict();
+  v.strictObject<ModelListEntries<IMS, IMLS>>({
+    ...inputModelListSchema.entries,
+    count: numberSchema,
+    items: v.array(createModelSchema(inputModelSchema)),
+  });
 
-type EnrichedModelShape<IMS extends InputModelSchema, EMS extends EmbeddedSchema = EmbeddedSchema> = ModelShape<IMS> & {
+type EnrichedModelEntries<
+  IMS extends InputModelSchema,
+  EMS extends EmbeddedSchema = EmbeddedSchema,
+> = ModelEntries<IMS> & {
   _embedded: EMS;
   _links: LinksSchema;
 };
@@ -101,9 +116,9 @@ type EnrichedModelShape<IMS extends InputModelSchema, EMS extends EmbeddedSchema
 export type EnrichedModelSchema<
   IMS extends InputModelSchema,
   EMS extends EmbeddedSchema = EmbeddedSchema,
-> = z.ZodObject<EnrichedModelShape<IMS, EMS>>;
+> = v.StrictObjectSchema<EnrichedModelEntries<IMS, EMS>, undefined>;
 
-export type EnrichedModel<IMS extends InputModelSchema, EMS extends EmbeddedSchema = EmbeddedSchema> = z.output<
+export type EnrichedModel<IMS extends InputModelSchema, EMS extends EmbeddedSchema = EmbeddedSchema> = v.InferOutput<
   EnrichedModelSchema<IMS, EMS>
 >;
 
@@ -117,23 +132,22 @@ export function createEnrichedModelSchema<IMS extends InputModelSchema, EMS exte
 export function createEnrichedModelSchema<IMS extends InputModelSchema, EMS extends EmbeddedSchema>(
   inputModelSchema: IMS,
   embeddedModelSchema?: EMS,
-) {
-  return z
-    .object({
-      ...createModelSchema(inputModelSchema).shape,
-      _embedded: embeddedModelSchema ?? embeddedSchema,
-      _links: linksSchema,
-    })
-    .strict();
+): EnrichedModelSchema<IMS, EMS> {
+  return v.strictObject<EnrichedModelEntries<IMS, EMS>>({
+    ...createModelSchema(inputModelSchema).entries,
+    _embedded: (embeddedModelSchema ?? embeddedSchema) as EMS,
+    _links: linksSchema,
+  });
 }
 
-type EnrichedModelListShape<
+type EnrichedModelListEntries<
   IMS extends InputModelSchema,
   IMLS extends InputModelListSchema,
   EMS extends EmbeddedSchema = EmbeddedSchema,
   EMLS extends EmbeddedSchema = EmbeddedSchema,
-> = ModelListShape<IMS, IMLS> & {
-  items: z.ZodArray<EnrichedModelSchema<IMS, EMS>>;
+> = IMLS['entries'] & {
+  count: typeof numberSchema;
+  items: v.ArraySchema<EnrichedModelSchema<IMS, EMS>, undefined>;
   _embedded: EMLS;
   _links: LinksSchema;
 };
@@ -143,14 +157,14 @@ export type EnrichedModelListSchema<
   IMLS extends InputModelListSchema,
   EMS extends EmbeddedSchema = EmbeddedSchema,
   EMLS extends EmbeddedSchema = EmbeddedSchema,
-> = z.ZodObject<EnrichedModelListShape<IMS, IMLS, EMS, EMLS>>;
+> = v.StrictObjectSchema<EnrichedModelListEntries<IMS, IMLS, EMS, EMLS>, undefined>;
 
 export type EnrichedModelList<
   IMS extends InputModelSchema,
   IMLS extends InputModelListSchema,
   EMS extends EmbeddedSchema = EmbeddedSchema,
   EMLS extends EmbeddedSchema = EmbeddedSchema,
-> = z.output<EnrichedModelListSchema<IMS, IMLS, EMS, EMLS>>;
+> = v.InferOutput<EnrichedModelListSchema<IMS, IMLS, EMS, EMLS>>;
 
 export function createEnrichedModelListSchema<IMS extends InputModelSchema, IMLS extends InputModelListSchema>(
   inputModelSchema: IMS,
@@ -172,20 +186,19 @@ export function createEnrichedModelListSchema<
   IMLS extends InputModelListSchema,
   EMS extends EmbeddedSchema,
   EMLS extends EmbeddedSchema,
->(inputModelSchema: IMS, inputModelListSchema: IMLS, embeddedModelSchema?: EMS, embeddedModelListSchema?: EMLS) {
-  return z
-    .object({
-      ...inputModelListSchema.shape,
-      count: numberSchema,
-      items: z.array(
-        embeddedModelSchema
-          ? createEnrichedModelSchema(inputModelSchema, embeddedModelSchema)
-          : createEnrichedModelSchema(inputModelSchema),
-      ),
-      _embedded: embeddedModelListSchema ?? embeddedSchema,
-      _links: linksSchema,
-    })
-    .strict();
+>(
+  inputModelSchema: IMS,
+  inputModelListSchema: IMLS,
+  embeddedModelSchema?: EMS,
+  embeddedModelListSchema?: EMLS,
+): EnrichedModelListSchema<IMS, IMLS, EMS, EMLS> {
+  return v.strictObject<EnrichedModelListEntries<IMS, IMLS, EMS, EMLS>>({
+    ...inputModelListSchema.entries,
+    count: numberSchema,
+    items: v.array(createEnrichedModelSchema(inputModelSchema, (embeddedModelSchema ?? embeddedSchema) as EMS)),
+    _embedded: (embeddedModelListSchema ?? embeddedSchema) as EMLS,
+    _links: linksSchema,
+  });
 }
 
 export type EnrichModel<IMS extends InputModelSchema, EMS extends EmbeddedSchema = EmbeddedSchema> = (

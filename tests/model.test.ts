@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { z } from 'zod';
+import * as v from 'valibot';
 import {
   createEnrichedModelListSchema,
   createEnrichedModelSchema,
@@ -15,52 +15,31 @@ import {
 describe('model', () => {
   describe('stringSchema', () => {
     test('success', async () => {
-      expect(stringSchema.parse('t')).toBe('t');
+      expect(v.parse(stringSchema, 't')).toBe('t');
     });
 
     test('failed', async () => {
       try {
-        stringSchema.parse('');
+        v.parse(stringSchema, '');
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "origin": "string",
-              "code": "too_small",
-              "minimum": 1,
-              "inclusive": true,
-              "path": [],
-              "message": "Too small: expected string to have >=1 characters"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid length: Expected >=1 but received 0]`);
       }
     });
   });
 
   describe('numberSchema', () => {
     test('success', async () => {
-      expect(numberSchema.parse('1')).toBe(1);
-      expect(numberSchema.parse(1)).toBe(1);
+      expect(v.parse(numberSchema, '1')).toBe(1);
+      expect(v.parse(numberSchema, 1)).toBe(1);
     });
 
     test('failed', async () => {
       try {
-        numberSchema.parse('t');
+        v.parse(numberSchema, 't');
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "expected": "number",
-              "code": "invalid_type",
-              "received": "NaN",
-              "path": [],
-              "message": "Invalid input: expected number, received NaN"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid type: Expected number but received NaN]`);
       }
     });
   });
@@ -69,87 +48,45 @@ describe('model', () => {
     test('success', async () => {
       const date = new Date();
 
-      expect(dateSchema.parse(date)).toEqual(date);
-      expect(dateSchema.parse(date.toJSON())).toEqual(date);
-      expect(dateSchema.parse(date.getTime())).toEqual(date);
+      expect(v.parse(dateSchema, date)).toEqual(date);
+      expect(v.parse(dateSchema, date.toJSON())).toEqual(date);
+      expect(v.parse(dateSchema, date.getTime())).toEqual(date);
     });
 
     test('failed', async () => {
       try {
-        dateSchema.parse('t');
+        v.parse(dateSchema, 't');
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "expected": "date",
-              "code": "invalid_type",
-              "received": "Invalid Date",
-              "path": [],
-              "message": "Invalid input: expected date, received Date"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid type: Expected Date but received "Invalid Date"]`);
       }
     });
   });
 
   describe('sortSchema', () => {
     test('success', async () => {
-      expect(sortSchema.parse('asc')).toBe('asc');
-      expect(sortSchema.parse('desc')).toBe('desc');
+      expect(v.parse(sortSchema, 'asc')).toBe('asc');
+      expect(v.parse(sortSchema, 'desc')).toBe('desc');
     });
 
     test('failed', async () => {
       try {
-        sortSchema.parse('');
+        v.parse(sortSchema, '');
         throw new Error('expect fail');
       } catch (e) {
-        expect(e).toMatchInlineSnapshot(`
-          [ZodError: [
-            {
-              "code": "invalid_union",
-              "errors": [
-                [
-                  {
-                    "code": "invalid_value",
-                    "values": [
-                      "asc"
-                    ],
-                    "path": [],
-                    "message": "Invalid input: expected \\"asc\\""
-                  }
-                ],
-                [
-                  {
-                    "code": "invalid_value",
-                    "values": [
-                      "desc"
-                    ],
-                    "path": [],
-                    "message": "Invalid input: expected \\"desc\\""
-                  }
-                ]
-              ],
-              "path": [],
-              "message": "Invalid input"
-            }
-          ]]
-        `);
+        expect(e).toMatchInlineSnapshot(`[ValiError: Invalid type: Expected ("asc" | "desc") but received ""]`);
       }
     });
   });
 
   describe('model schemas', () => {
-    const inputModelSchema = z.object({ name: stringSchema }).strict();
-    const inputModelListSchema = z
-      .object({
-        offset: numberSchema.default(0),
-        limit: numberSchema.default(20),
-        filters: z.object({ name: stringSchema.optional() }).strict().default({}),
-        sort: z.object({ name: sortSchema }).strict().default({}),
-      })
-      .strict();
+    const inputModelSchema = v.strictObject({ name: stringSchema });
+    const inputModelListSchema = v.strictObject({
+      offset: v.optional(numberSchema, 0),
+      limit: v.optional(numberSchema, 20),
+      filters: v.optional(v.strictObject({ name: v.optional(stringSchema) }), {}),
+      sort: v.optional(v.strictObject({ name: sortSchema }), {}),
+    });
 
     const modelSchema = createModelSchema(inputModelSchema);
     const modelListSchema = createModelListSchema(inputModelSchema, inputModelListSchema);
@@ -161,10 +98,10 @@ describe('model', () => {
       const createdAt = new Date('2025-07-15T10:00:00.000Z');
       const updatedAt = new Date('2025-07-15T10:05:00.000Z');
 
-      const model1: z.infer<typeof modelSchema> = { id: 'id1', createdAt, name: 'test1' };
-      const model2: z.infer<typeof modelSchema> = { id: 'id2', createdAt, updatedAt, name: 'test2' };
+      const model1: v.InferOutput<typeof modelSchema> = { id: 'id1', createdAt, name: 'test1' };
+      const model2: v.InferOutput<typeof modelSchema> = { id: 'id2', createdAt, updatedAt, name: 'test2' };
 
-      const modelList: z.infer<typeof modelListSchema> = {
+      const modelList: v.InferOutput<typeof modelListSchema> = {
         offset: 0,
         limit: 20,
         filters: { name: 'test' },
@@ -175,14 +112,14 @@ describe('model', () => {
 
       describe('createModelSchema', () => {
         test('success', async () => {
-          expect(modelSchema.parse(model1)).toMatchInlineSnapshot(`
+          expect(v.parse(modelSchema, model1)).toMatchInlineSnapshot(`
             {
               "createdAt": 2025-07-15T10:00:00.000Z,
               "id": "id1",
               "name": "test1",
             }
           `);
-          expect(modelSchema.parse(model2)).toMatchInlineSnapshot(`
+          expect(v.parse(modelSchema, model2)).toMatchInlineSnapshot(`
             {
               "createdAt": 2025-07-15T10:00:00.000Z,
               "id": "id2",
@@ -194,28 +131,17 @@ describe('model', () => {
 
         test('failed', async () => {
           try {
-            modelSchema.parse({ id: 'id', createdAt, name: 'test', unknown: 'unknown' });
+            v.parse(modelSchema, { id: 'id', createdAt, name: 'test', unknown: 'unknown' });
             throw new Error('expect fail');
           } catch (e) {
-            expect(e).toMatchInlineSnapshot(`
-              [ZodError: [
-                {
-                  "code": "unrecognized_keys",
-                  "keys": [
-                    "unknown"
-                  ],
-                  "path": [],
-                  "message": "Unrecognized key: \\"unknown\\""
-                }
-              ]]
-            `);
+            expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected never but received "unknown"]`);
           }
         });
       });
 
       describe('createModelListSchema', () => {
         test('success', async () => {
-          expect(modelListSchema.parse(modelList)).toMatchInlineSnapshot(`
+          expect(v.parse(modelListSchema, modelList)).toMatchInlineSnapshot(`
             {
               "count": 2,
               "filters": {
@@ -245,24 +171,13 @@ describe('model', () => {
 
         test('failed', async () => {
           try {
-            modelListSchema.parse({
+            v.parse(modelListSchema, {
               ...modelList,
               unknown: 'unknown',
             });
             throw new Error('expect fail');
           } catch (e) {
-            expect(e).toMatchInlineSnapshot(`
-              [ZodError: [
-                {
-                  "code": "unrecognized_keys",
-                  "keys": [
-                    "unknown"
-                  ],
-                  "path": [],
-                  "message": "Unrecognized key: \\"unknown\\""
-                }
-              ]]
-            `);
+            expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected never but received "unknown"]`);
           }
         });
       });
@@ -272,13 +187,13 @@ describe('model', () => {
       const createdAt = new Date('2025-07-15T10:00:00.000Z');
       const updatedAt = new Date('2025-07-15T10:05:00.000Z');
 
-      const enrichedModel1: z.infer<typeof enrichedModelSchema> = {
+      const enrichedModel1: v.InferOutput<typeof enrichedModelSchema> = {
         id: 'id',
         createdAt,
         name: 'test',
       };
 
-      const enrichedModel2: z.infer<typeof enrichedModelSchema> = {
+      const enrichedModel2: v.InferOutput<typeof enrichedModelSchema> = {
         id: 'id',
         createdAt,
         updatedAt,
@@ -291,7 +206,7 @@ describe('model', () => {
         },
       };
 
-      const enrichedModelList1: z.infer<typeof enrichedModelListSchema> = {
+      const enrichedModelList1: v.InferOutput<typeof enrichedModelListSchema> = {
         offset: 0,
         limit: 20,
         filters: { name: 'test' },
@@ -300,7 +215,7 @@ describe('model', () => {
         count: 2,
       };
 
-      const enrichedModelList2: z.infer<typeof enrichedModelListSchema> = {
+      const enrichedModelList2: v.InferOutput<typeof enrichedModelListSchema> = {
         offset: 0,
         limit: 20,
         filters: { name: 'test' },
@@ -316,14 +231,14 @@ describe('model', () => {
 
       describe('createEnrichedModelSchema', () => {
         test('success', async () => {
-          expect(enrichedModelSchema.parse(enrichedModel1)).toMatchInlineSnapshot(`
+          expect(v.parse(enrichedModelSchema, enrichedModel1)).toMatchInlineSnapshot(`
             {
               "createdAt": 2025-07-15T10:00:00.000Z,
               "id": "id",
               "name": "test",
             }
           `);
-          expect(enrichedModelSchema.parse(enrichedModel2)).toMatchInlineSnapshot(`
+          expect(v.parse(enrichedModelSchema, enrichedModel2)).toMatchInlineSnapshot(`
             {
               "_embedded": {
                 "key": "value",
@@ -357,68 +272,26 @@ describe('model', () => {
 
         test('failed', async () => {
           try {
-            enrichedModelSchema.parse({ ...enrichedModel1, unknown: 'unknown' });
+            v.parse(enrichedModelSchema, { ...enrichedModel1, unknown: 'unknown' });
             throw new Error('expect fail');
           } catch (e) {
-            expect(e).toMatchInlineSnapshot(`
-              [ZodError: [
-                {
-                  "code": "unrecognized_keys",
-                  "keys": [
-                    "unknown"
-                  ],
-                  "path": [],
-                  "message": "Unrecognized key: \\"unknown\\""
-                }
-              ]]
-            `);
+            expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected never but received "unknown"]`);
           }
         });
 
         test('failed with invalid link', async () => {
           try {
-            enrichedModelSchema.parse({ ...enrichedModel1, _links: { read: { name: 'read' } } });
+            v.parse(enrichedModelSchema, { ...enrichedModel1, _links: { read: { name: 'read' } } });
             throw new Error('expect fail');
           } catch (e) {
-            expect(e).toMatchInlineSnapshot(`
-              [ZodError: [
-                {
-                  "code": "invalid_union",
-                  "errors": [
-                    [
-                      {
-                        "expected": "string",
-                        "code": "invalid_type",
-                        "path": [
-                          "href"
-                        ],
-                        "message": "Invalid input: expected string, received undefined"
-                      }
-                    ],
-                    [
-                      {
-                        "expected": "array",
-                        "code": "invalid_type",
-                        "path": [],
-                        "message": "Invalid input: expected array, received object"
-                      }
-                    ]
-                  ],
-                  "path": [
-                    "_links",
-                    "read"
-                  ],
-                  "message": "Invalid input"
-                }
-              ]]
-            `);
+            expect(e).toMatchInlineSnapshot(`[ValiError: Invalid type: Expected (Object | Array) but received Object]`);
           }
         });
       });
 
       describe('createEnrichedModelListSchema', () => {
         test('success', async () => {
-          expect(enrichedModelListSchema.parse(enrichedModelList1)).toMatchInlineSnapshot(`
+          expect(v.parse(enrichedModelListSchema, enrichedModelList1)).toMatchInlineSnapshot(`
             {
               "count": 2,
               "filters": {
@@ -466,7 +339,7 @@ describe('model', () => {
               },
             }
           `);
-          expect(enrichedModelListSchema.parse(enrichedModelList2)).toMatchInlineSnapshot(`
+          expect(v.parse(enrichedModelListSchema, enrichedModelList2)).toMatchInlineSnapshot(`
             {
               "_embedded": {
                 "key": "value",
@@ -536,21 +409,10 @@ describe('model', () => {
 
         test('failed', async () => {
           try {
-            enrichedModelListSchema.parse({ ...enrichedModelList1, unknown: 'unknown' });
+            v.parse(enrichedModelListSchema, { ...enrichedModelList1, unknown: 'unknown' });
             throw new Error('expect fail');
           } catch (e) {
-            expect(e).toMatchInlineSnapshot(`
-              [ZodError: [
-                {
-                  "code": "unrecognized_keys",
-                  "keys": [
-                    "unknown"
-                  ],
-                  "path": [],
-                  "message": "Unrecognized key: \\"unknown\\""
-                }
-              ]]
-            `);
+            expect(e).toMatchInlineSnapshot(`[ValiError: Invalid key: Expected never but received "unknown"]`);
           }
         });
       });
